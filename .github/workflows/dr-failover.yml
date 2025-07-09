@@ -1,0 +1,92 @@
+# name: Complete DR Failover
+
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       confirm:
+#         description: 'Type "FAILOVER" to confirm DR failover'
+#         required: true
+#         type: string
+#       dns_provider:
+#         description: 'DNS provider for failover'
+#         required: true
+#         type: choice
+#         options:
+#           - manual
+#           - cloudflare
+#           - route53_alternative
+
+# env:
+#   PROJECT_NAME: student-record-system-v2
+#   PRIMARY_REGION: eu-central-1
+#   DR_REGION: eu-west-1
+
+# jobs:
+#   failover:
+#     name: Execute Complete DR Failover
+#     runs-on: ubuntu-latest
+#     if: github.event.inputs.confirm == 'FAILOVER'
+    
+#     steps:
+#     # [Previous steps remain the same...]
+    
+#     - name: Promote RDS Read Replica
+#       id: promote-rds
+#       run: |
+#         # Promotion script as shown above
+    
+#     - name: Update ECS with New RDS Endpoint
+#       run: |
+#         # Update script as shown above
+    
+#     - name: Enable Lambda Functions (if applicable)
+#       run: |
+#         # Check if Lambda functions exist
+#         FUNCTIONS=$(aws lambda list-functions \
+#           --query "Functions[?starts_with(FunctionName, '${{ env.PROJECT_NAME }}')]" \
+#           --region ${{ env.DR_REGION }} \
+#           --output json)
+        
+#         if [ "$FUNCTIONS" != "[]" ]; then
+#           echo "🔌 Enabling Lambda functions..."
+#           for func in $(echo $FUNCTIONS | jq -r '.[].FunctionName'); do
+#             aws lambda put-function-concurrency \
+#               --function-name $func \
+#               --reserved-concurrent-executions 100 \
+#               --region ${{ env.DR_REGION }}
+#           done
+#         fi
+    
+#     - name: Update DNS
+#       run: |
+#         if [ "${{ github.event.inputs.dns_provider }}" == "cloudflare" ]; then
+#           # Cloudflare API update
+#           ./scripts/cloudflare-dns-failover.sh
+#         else
+#           # Manual instructions
+#           ./scripts/manual-dns-failover.sh
+#         fi
+    
+#     - name: Verify Complete Failover
+#       run: |
+#         echo "🔍 Verifying failover completion..."
+        
+#         # Check ECS
+#         ECS_STATUS=$(aws ecs describe-services \
+#           --cluster ${{ steps.dr-config.outputs.cluster }} \
+#           --services ${{ steps.dr-config.outputs.service }} \
+#           --query 'services[0].runningCount' \
+#           --output text \
+#           --region ${{ env.DR_REGION }})
+        
+#         # Check RDS
+#         RDS_STATUS=$(aws rds describe-db-clusters \
+#           --db-cluster-identifier ${{ env.PROJECT_NAME }}-aurora-cluster-replica \
+#           --query 'DBClusters[0].Status' \
+#           --output text \
+#           --region ${{ env.DR_REGION }})
+        
+#         echo "✅ Failover Status:"
+#         echo "- ECS Running Tasks: $ECS_STATUS"
+#         echo "- RDS Status: $RDS_STATUS"
+#         echo "- Application URL: http://${{ steps.dr-config.outputs.alb }}"
