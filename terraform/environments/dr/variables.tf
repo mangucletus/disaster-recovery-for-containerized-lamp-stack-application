@@ -82,8 +82,3 @@ variable "skip_read_replica" {
   default     = false
 }
 
-variable "skip_read_replica" {
-  description = "Skip creating read replica"
-  type        = bool
-  default     = false
-}
