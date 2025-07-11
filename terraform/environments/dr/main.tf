@@ -133,7 +133,7 @@ module "ecs" {
   environment           = var.environment
   aws_region            = var.aws_region
   ecr_repository_url    = data.aws_ssm_parameter.ecr_repository_url.value
-  private_subnet_ids    = module.networking.private_subnet_ids
+  private_subnet_ids    = module.networking.public_subnet_ids  # Use public subnets since no NAT
   ecs_security_group_id = module.security.ecs_security_group_id
   target_group_arn      = module.alb.target_group_arn
   database_endpoint     = module.database.cluster_endpoint
@@ -146,7 +146,7 @@ module "ecs" {
   task_memory           = "512"
 }
 
-# Store DR endpoints for failover script
+# Store DR endpoints for failover script and CloudFront
 resource "aws_ssm_parameter" "dr_alb_dns" {
   name  = "/${var.project_name}/dr/alb-dns-name"
   type  = "String"
@@ -169,6 +169,13 @@ resource "aws_ssm_parameter" "dr_ecs_service_name" {
   name  = "/${var.project_name}/dr/ecs-service-name"
   type  = "String"
   value = module.ecs.service_name
+}
+
+# Parameter for failover status
+resource "aws_ssm_parameter" "failover_in_progress" {
+  name  = "/${var.project_name}/failover/in-progress"
+  type  = "String"
+  value = "false"
 }
 
 # CloudWatch Dashboard for DR monitoring
@@ -207,7 +214,40 @@ resource "aws_cloudwatch_dashboard" "dr" {
           region = var.aws_region
           title  = "ECS Service Metrics"
         }
+      },
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", split(":", module.alb.target_group_arn)[5], "LoadBalancer", split("/", module.alb.alb_arn)[2]],
+            [".", "UnHealthyHostCount", ".", ".", ".", "."]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "DR ALB Target Health"
+        }
       }
     ]
   })
+}
+
+# CloudWatch Alarm for DR readiness
+resource "aws_cloudwatch_metric_alarm" "dr_readiness" {
+  alarm_name          = "${var.project_name}-dr-readiness-check"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "90"
+  alarm_description   = "DR RDS replica health check"
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    DBClusterIdentifier = module.database.cluster_id
+  }
 }

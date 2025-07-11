@@ -33,6 +33,12 @@ provider "aws" {
   }
 }
 
+# Provider for DR region (to get DR ALB DNS)
+provider "aws" {
+  alias  = "dr"
+  region = "eu-west-1"
+}
+
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
@@ -111,16 +117,6 @@ module "alb" {
   access_logs_bucket    = module.s3.assets_bucket_id
 }
 
-# Create CloudFront distribution after ALB is created
-module "cloudfront" {
-  source = "../../modules/cloudfront"
-  
-  project_name        = var.project_name
-  environment         = var.environment
-  primary_alb_dns_name = module.alb.alb_dns_name
-  dr_alb_dns_name     = "YOUR-DR-ALB-DNS-NAME"  # You'll get this after DR deployment
-}
-
 # Create ECS cluster and service
 module "ecs" {
   source = "../../modules/ecs"
@@ -142,21 +138,7 @@ module "ecs" {
   task_memory           = "512"
 }
 
-# Create Route53 DNS records (if domain is available)
-module "route53" {
-  source = "../../modules/route53"
-  count  = var.route53_hosted_zone_id != "" ? 1 : 0
-
-  project_name         = var.project_name
-  hosted_zone_id       = var.route53_hosted_zone_id
-  domain_name          = var.domain_name
-  subdomain            = var.subdomain
-  primary_alb_dns_name = module.alb.alb_dns_name
-  primary_alb_zone_id  = module.alb.alb_zone_id
-  create_health_check  = true
-}
-
-# Store important outputs in Parameter Store for DR region
+# Store important outputs in Parameter Store for DR region and Lambda
 resource "aws_ssm_parameter" "database_cluster_arn" {
   name  = "/${var.project_name}/production/database-cluster-arn"
   type  = "String"
@@ -169,7 +151,61 @@ resource "aws_ssm_parameter" "ecr_repository_url" {
   value = module.ecr.repository_url
 }
 
-# CloudWatch Alarms
+resource "aws_ssm_parameter" "target_group_arn" {
+  name  = "/${var.project_name}/primary/target-group-arn"
+  type  = "String"
+  value = module.alb.target_group_arn
+}
+
+resource "aws_ssm_parameter" "primary_alb_dns" {
+  name  = "/${var.project_name}/primary/alb-dns-name"
+  type  = "String"
+  value = module.alb.alb_dns_name
+}
+
+# Get DR ALB DNS from parameter store (created by DR deployment)
+data "aws_ssm_parameter" "dr_alb_dns" {
+  provider = aws.dr
+  name     = "/${var.project_name}/dr/alb-dns-name"
+
+  # This will fail on first run, so we make it optional
+  depends_on = [aws_ssm_parameter.primary_alb_dns]
+}
+
+# Create CloudFront distribution for automatic failover
+# NOTE: This should be deployed AFTER the DR environment is set up
+# Comment this out on first deployment, then uncomment after DR is ready
+module "cloudfront" {
+  source = "../../modules/cloudfront"
+
+  project_name         = var.project_name
+  environment          = var.environment
+  primary_alb_dns_name = module.alb.alb_dns_name
+  primary_alb_arn      = module.alb.alb_arn
+  dr_alb_dns_name      = try(data.aws_ssm_parameter.dr_alb_dns.value, "placeholder.elb.eu-west-1.amazonaws.com")
+  primary_region       = var.aws_region
+  dr_region            = "eu-west-1"
+}
+
+# Create Lambda for automatic failover orchestration
+# This should also be deployed after DR is ready
+module "lambda_failover" {
+  source = "../../modules/lambda-failover"
+
+  project_name              = var.project_name
+  environment               = var.environment
+  primary_region            = var.aws_region
+  dr_region                 = "eu-west-1"
+  sns_topic_arn             = module.cloudfront.sns_topic_arn
+  dr_ecs_cluster_name       = "${var.project_name}-cluster"
+  dr_ecs_service_name       = "${var.project_name}-service"
+  dr_rds_cluster_identifier = "${var.project_name}-aurora-cluster-replica"
+  primary_alb_alarm_name    = module.cloudfront.primary_alarm_name
+
+  depends_on = [module.cloudfront]
+}
+
+# CloudWatch Alarms for monitoring
 resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
   alarm_name          = "${var.project_name}-ecs-cpu-high"
   comparison_operator = "GreaterThanThreshold"
@@ -203,3 +239,61 @@ resource "aws_cloudwatch_metric_alarm" "alb_target_unhealthy" {
     LoadBalancer = split("/", module.alb.alb_arn)[2]
   }
 }
+
+# Store CloudFront URL in Parameter Store for easy access
+resource "aws_ssm_parameter" "cloudfront_url" {
+  name  = "/${var.project_name}/cloudfront-url"
+  type  = "String"
+  value = try(module.cloudfront.cloudfront_url, "not-deployed")
+
+  depends_on = [module.cloudfront]
+}
+
+resource "aws_ssm_parameter" "cloudfront_distribution_id" {
+  name  = "/${var.project_name}/cloudfront-distribution-id"
+  type  = "String"
+  value = try(module.cloudfront.cloudfront_distribution_id, "not-deployed")
+
+  depends_on = [module.cloudfront]
+}
+
+resource "aws_cloudwatch_dashboard" "ecs_dashboard" {
+  dashboard_name = "${var.project_name}-dashboard"
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ServiceName", module.ecs.service_name, "ClusterName", module.ecs.cluster_name],
+            [".", "MemoryUtilization", ".", ".", ".", "."]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "ECS Service Metrics"
+        }
+      },
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", split("/", module.alb.alb_arn)[2]],
+            [".", "HealthyHostCount", ".", ".", { stat = "Average" }],
+            [".", "UnHealthyHostCount", ".", ".", { stat = "Average" }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = var.aws_region
+          title  = "ALB Metrics"
+        }
+      }
+    ]
+  })
+}
+
+

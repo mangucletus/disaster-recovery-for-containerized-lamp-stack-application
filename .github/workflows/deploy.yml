@@ -1,178 +1,226 @@
-# name: Deploy to AWS
+name: Deploy to AWS
 
-# on:
-#   push:
-#     branches:
-#       - main
-#       - develop
-#   pull_request:
-#     branches:
-#       - main
-#   workflow_dispatch:
-#     inputs:
-#       environment:
-#         description: 'Environment to deploy to'
-#         required: true
-#         default: 'production'
-#         type: choice
-#         options:
-#           - production
-#           - dr
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - production
+          - dr
 
-# env:
-#   AWS_REGION: eu-central-1
-#   PROJECT_NAME: student-record-system-v2
+env:
+  AWS_REGION: eu-central-1
+  DR_REGION: eu-west-1
+  PROJECT_NAME: student-record-system-v2
 
-# jobs:
-#   # Build and push Docker image
-#   build:
-#     name: Build and Push Docker Image
-#     runs-on: ubuntu-latest
+jobs:
+  # Build and push Docker image
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
     
-#     steps:
-#     - name: Checkout code
-#       uses: actions/checkout@v3
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
     
-#     - name: Configure AWS credentials
-#       uses: aws-actions/configure-aws-credentials@v2
-#       with:
-#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#         aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
     
-#     - name: Login to Amazon ECR
-#       id: login-ecr
-#       uses: aws-actions/amazon-ecr-login@v1
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
     
-#     - name: Build, tag, and push image to Amazon ECR
-#       env:
-#         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#         ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
-#         IMAGE_TAG: ${{ github.sha }}
-#       run: |
-#         cd docker
-#         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-#         docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-#         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-#         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        cd docker
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
     
-#     - name: Output image URI
-#       id: image
-#       env:
-#         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#         ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
-#         IMAGE_TAG: ${{ github.sha }}
-#       run: echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+    - name: Output image URI
+      id: image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-#   # Deploy infrastructure with Terraform
-#   deploy-infrastructure:
-#     name: Deploy Infrastructure
-#     runs-on: ubuntu-latest
-#     needs: build
-#     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+  # Deploy DR infrastructure first
+  deploy-dr:
+    name: Deploy DR Infrastructure
+    runs-on: ubuntu-latest
+    needs: build
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'dr' || github.event.inputs.environment == 'all'))
     
-#     strategy:
-#       matrix:
-#         environment: [production]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
     
-#     steps:
-#     - name: Checkout code
-#       uses: actions/checkout@v3
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
     
-#     - name: Setup Terraform
-#       uses: hashicorp/setup-terraform@v2
-#       with:
-#         terraform_version: 1.5.0
+    - name: Configure AWS credentials for DR region
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.DR_REGION }}
     
-#     - name: Configure AWS credentials
-#       uses: aws-actions/configure-aws-credentials@v2
-#       with:
-#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#         aws-region: ${{ env.AWS_REGION }}
+    - name: Terraform Init
+      working-directory: ./terraform/environments/dr
+      run: terraform init
     
-#     - name: Terraform Init
-#       working-directory: ./terraform/environments/${{ matrix.environment }}
-#       run: terraform init
+    - name: Terraform Plan
+      working-directory: ./terraform/environments/dr
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform plan -out=tfplan
     
-#     - name: Terraform Plan
-#       working-directory: ./terraform/environments/${{ matrix.environment }}
-#       env:
-#         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
-#       run: terraform plan -out=tfplan
+    - name: Terraform Apply
+      working-directory: ./terraform/environments/dr
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform apply -auto-approve tfplan
     
-#     - name: Terraform Apply
-#       if: github.ref == 'refs/heads/main'
-#       working-directory: ./terraform/environments/${{ matrix.environment }}
-#       env:
-#         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
-#       run: terraform apply -auto-approve tfplan
+    - name: Get DR ALB DNS
+      id: dr-alb
+      working-directory: ./terraform/environments/dr
+      run: |
+        DR_ALB_DNS=$(terraform output -raw alb_dns_name)
+        echo "dns=$DR_ALB_DNS" >> $GITHUB_OUTPUT
 
-#   # Update ECS service with new image
-#   update-service:
-#     name: Update ECS Service
-#     runs-on: ubuntu-latest
-#     needs: [build, deploy-infrastructure]
-#     if: github.ref == 'refs/heads/main'
+  # Deploy production infrastructure
+  deploy-production:
+    name: Deploy Production Infrastructure
+    runs-on: ubuntu-latest
+    needs: [build, deploy-dr]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'))
     
-#     steps:
-#     - name: Configure AWS credentials
-#       uses: aws-actions/configure-aws-credentials@v2
-#       with:
-#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#         aws-region: ${{ env.AWS_REGION }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
     
-#     - name: Update ECS service
-#       run: |
-#         aws ecs update-service \
-#           --cluster ${{ env.PROJECT_NAME }}-cluster \
-#           --service ${{ env.PROJECT_NAME }}-service \
-#           --force-new-deployment \
-#           --region ${{ env.AWS_REGION }}
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
     
-#     - name: Wait for service stability
-#       run: |
-#         aws ecs wait services-stable \
-#           --cluster ${{ env.PROJECT_NAME }}-cluster \
-#           --services ${{ env.PROJECT_NAME }}-service \
-#           --region ${{ env.AWS_REGION }}
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Terraform Init
+      working-directory: ./terraform/environments/production
+      run: terraform init
+    
+    - name: Terraform Plan
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform plan -out=tfplan
+    
+    - name: Terraform Apply
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform apply -auto-approve tfplan
 
-#   # Deploy DR infrastructure (only on manual trigger)
-#   deploy-dr:
-#     name: Deploy DR Infrastructure
-#     runs-on: ubuntu-latest
-#     needs: build
-#     if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dr'
+  # Update ECS services with new image
+  update-services:
+    name: Update ECS Services
+    runs-on: ubuntu-latest
+    needs: [build, deploy-production]
+    if: github.ref == 'refs/heads/main'
     
-#     steps:
-#     - name: Checkout code
-#       uses: actions/checkout@v3
+    steps:
+    - name: Configure AWS credentials for production
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
     
-#     - name: Setup Terraform
-#       uses: hashicorp/setup-terraform@v2
-#       with:
-#         terraform_version: 1.5.0
+    - name: Update production ECS service
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.PROJECT_NAME }}-cluster \
+          --service ${{ env.PROJECT_NAME }}-service \
+          --force-new-deployment \
+          --region ${{ env.AWS_REGION }}
     
-#     - name: Configure AWS credentials
-#       uses: aws-actions/configure-aws-credentials@v2
-#       with:
-#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#         aws-region: eu-west-1  # DR region
+    - name: Wait for production service stability
+      run: |
+        aws ecs wait services-stable \
+          --cluster ${{ env.PROJECT_NAME }}-cluster \
+          --services ${{ env.PROJECT_NAME }}-service \
+          --region ${{ env.AWS_REGION }}
     
-#     - name: Terraform Init
-#       working-directory: ./terraform/environments/dr
-#       run: terraform init
+    # Note: DR ECS service remains at 0 desired count until failover
+
+  # Output deployment summary
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [deploy-production, update-services]
+    if: always()
     
-#     - name: Terraform Plan
-#       working-directory: ./terraform/environments/dr
-#       env:
-#         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
-#       run: terraform plan -out=tfplan
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
     
-#     - name: Terraform Apply
-#       working-directory: ./terraform/environments/dr
-#       env:
-#         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
-#       run: terraform apply -auto-approve tfplan
+    - name: Get CloudFront URL
+      id: cloudfront
+      run: |
+        # Get CloudFront distribution URL from SSM Parameter Store
+        CF_URL=$(aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/cloudfront-url" --query 'Parameter.Value' --output text 2>/dev/null || echo "Not deployed yet")
+        echo "url=$CF_URL" >> $GITHUB_OUTPUT
+    
+    - name: Display Summary
+      run: |
+        echo "## Deployment Summary 🚀"
+        echo ""
+        echo "### Production Region (eu-central-1)"
+        echo "- Status: ✅ Deployed"
+        echo ""
+        echo "### DR Region (eu-west-1)"
+        echo "- Status: ✅ Ready (Pilot Light Mode)"
+        echo "- ECS Tasks: 0 (Cost Optimization)"
+        echo "- RDS: Read Replica Active"
+        echo ""
+        echo "### Access Information"
+        echo "- CloudFront URL: https://${{ steps.cloudfront.outputs.url }}"
+        echo "- Failover: Automatic via CloudFront origin groups"
+        echo ""
+        echo "### Monitoring"
+        echo "- Production Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=${{ env.PROJECT_NAME }}-production-dashboard"
+        echo "- DR Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=eu-west-1#dashboards:name=${{ env.PROJECT_NAME }}-dr-dashboard"

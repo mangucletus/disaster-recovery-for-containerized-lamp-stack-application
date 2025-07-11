@@ -85,3 +85,12 @@ variable "log_retention_days" {
   type        = number
   default     = 7
 }
+
+# Add to terraform/modules/ecs/variables.tf:
+
+variable "assign_public_ip" {
+  description = "Whether to assign public IP to tasks (needed for DR without NAT)"
+  type        = bool
+  default     = false
+}
+
