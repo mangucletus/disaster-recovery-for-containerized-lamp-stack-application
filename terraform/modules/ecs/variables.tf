@@ -94,3 +94,8 @@ variable "assign_public_ip" {
   default     = false
 }
 
+variable "assign_public_ip" {
+  description = "Whether to assign public IP to tasks"
+  type        = bool
+  default     = false
+}

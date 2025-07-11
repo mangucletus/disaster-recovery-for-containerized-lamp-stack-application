@@ -113,11 +113,50 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: echo "uri=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-  # Deploy DR infrastructure first
+  # Deploy production infrastructure FIRST (changed order)
+  deploy-production:
+    name: Deploy Production Infrastructure
+    runs-on: ubuntu-latest
+    needs: build
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Terraform Init
+      working-directory: ./terraform/environments/production
+      run: terraform init
+    
+    - name: Terraform Plan
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform plan -out=tfplan
+    
+    - name: Terraform Apply
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform apply -auto-approve tfplan
+
+  # Deploy DR infrastructure AFTER production
   deploy-dr:
     name: Deploy DR Infrastructure
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, deploy-production]
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'dr' || github.event.inputs.environment == 'all'))
     
     steps:
@@ -136,6 +175,17 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.DR_REGION }}
     
+    - name: Check if production resources exist
+      id: check-prod
+      run: |
+        # Check if production database exists
+        if aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/production/database-cluster-arn" --region ${{ env.AWS_REGION }} 2>/dev/null; then
+          echo "skip_replica=false" >> $GITHUB_OUTPUT
+        else
+          echo "skip_replica=true" >> $GITHUB_OUTPUT
+          echo "Production resources not found. Will create DR without read replica."
+        fi
+    
     - name: Terraform Init
       working-directory: ./terraform/environments/dr
       run: terraform init
@@ -144,12 +194,14 @@ jobs:
       working-directory: ./terraform/environments/dr
       env:
         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+        TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
       run: terraform plan -out=tfplan
     
     - name: Terraform Apply
       working-directory: ./terraform/environments/dr
       env:
         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+        TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
       run: terraform apply -auto-approve tfplan
     
     - name: Get DR ALB DNS
@@ -158,13 +210,6 @@ jobs:
       run: |
         DR_ALB_DNS=$(terraform output -raw alb_dns_name)
         echo "dns=$DR_ALB_DNS" >> $GITHUB_OUTPUT
-
-  # Deploy production infrastructure
-  deploy-production:
-    name: Deploy Production Infrastructure
-    runs-on: ubuntu-latest
-    needs: [build, deploy-dr]
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'))
     
     steps:
     - name: Checkout code
@@ -239,7 +284,7 @@ jobs:
   deployment-summary:
     name: Deployment Summary
     runs-on: ubuntu-latest
-    needs: [deploy-production, update-services]
+    needs: [deploy-dr, update-services]
     if: always()
     
     steps:

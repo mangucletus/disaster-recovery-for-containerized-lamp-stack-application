@@ -73,3 +73,17 @@ variable "acm_certificate_arn" {
   type        = string
   default     = ""
 }
+
+
+
+variable "skip_read_replica" {
+  description = "Skip creating read replica (for first deployment when production doesn't exist)"
+  type        = bool
+  default     = false
+}
+
+variable "skip_read_replica" {
+  description = "Skip creating read replica"
+  type        = bool
+  default     = false
+}

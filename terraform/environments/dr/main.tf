@@ -42,16 +42,21 @@ provider "aws" {
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# Get production database cluster ARN from Parameter Store
+# Check if production resources exist (for first deployment)
 data "aws_ssm_parameter" "database_cluster_arn" {
   provider = aws.primary
   name     = "/${var.project_name}/production/database-cluster-arn"
+  
+  # This makes the data source optional - won't fail if doesn't exist
+  count = var.skip_read_replica ? 0 : 1
 }
 
-# Get ECR repository URL from Parameter Store
 data "aws_ssm_parameter" "ecr_repository_url" {
   provider = aws.primary
   name     = "/${var.project_name}/production/ecr-repository-url"
+  
+  # This makes the data source optional
+  count = var.skip_read_replica ? 0 : 1
 }
 
 # Create networking infrastructure (without NAT gateways to save costs)
@@ -88,7 +93,7 @@ module "ecr" {
   enable_cross_region_replication = false
 }
 
-# Create RDS Aurora read replica
+# Create RDS Aurora - either read replica or standalone
 module "database" {
   source = "../../modules/database"
 
@@ -100,8 +105,8 @@ module "database" {
   master_username    = var.database_username
   master_password    = var.database_password
   instance_class     = "db.t3.small" # Smaller instance for DR
-  is_read_replica    = true
-  source_cluster_arn = data.aws_ssm_parameter.database_cluster_arn.value
+  is_read_replica    = var.skip_read_replica ? false : true
+  source_cluster_arn = var.skip_read_replica ? "" : data.aws_ssm_parameter.database_cluster_arn[0].value
 }
 
 # Create S3 buckets (destination for replication)
@@ -125,6 +130,11 @@ module "alb" {
   certificate_arn       = var.acm_certificate_arn
 }
 
+# Use a local ECR URL if production doesn't exist yet
+locals {
+  ecr_repository_url = var.skip_read_replica ? "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/${var.project_name}" : data.aws_ssm_parameter.ecr_repository_url[0].value
+}
+
 # Create ECS cluster and service (with 0 desired count for pilot light)
 module "ecs" {
   source = "../../modules/ecs"
@@ -132,7 +142,7 @@ module "ecs" {
   project_name          = var.project_name
   environment           = var.environment
   aws_region            = var.aws_region
-  ecr_repository_url    = data.aws_ssm_parameter.ecr_repository_url.value
+  ecr_repository_url    = local.ecr_repository_url
   private_subnet_ids    = module.networking.public_subnet_ids  # Use public subnets since no NAT
   ecs_security_group_id = module.security.ecs_security_group_id
   target_group_arn      = module.alb.target_group_arn
@@ -144,6 +154,7 @@ module "ecs" {
   max_capacity          = 10
   task_cpu              = "256"
   task_memory           = "512"
+  assign_public_ip      = true  # Need public IP since no NAT gateway
 }
 
 # Store DR endpoints for failover script and CloudFront
@@ -197,7 +208,7 @@ resource "aws_cloudwatch_dashboard" "dr" {
           period = 300
           stat   = "Average"
           region = var.aws_region
-          title  = "RDS Read Replica Metrics"
+          title  = "RDS Metrics"
         }
       },
       {
@@ -244,7 +255,7 @@ resource "aws_cloudwatch_metric_alarm" "dr_readiness" {
   period              = "300"
   statistic           = "Average"
   threshold           = "90"
-  alarm_description   = "DR RDS replica health check"
+  alarm_description   = "DR RDS health check"
   treat_missing_data  = "breaching"
 
   dimensions = {

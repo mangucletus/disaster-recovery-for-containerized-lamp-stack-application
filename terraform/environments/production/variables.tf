@@ -92,3 +92,11 @@ variable "acm_certificate_arn" {
   type        = string
   default     = ""
 }
+
+# Add this variable to terraform/environments/production/variables.tf
+
+variable "deploy_cloudfront" {
+  description = "Deploy CloudFront and Lambda failover (set to false on first deployment)"
+  type        = bool
+  default     = true
+}
