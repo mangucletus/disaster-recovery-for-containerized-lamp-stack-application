@@ -68,7 +68,7 @@ resource "aws_rds_cluster_instance" "main" {
   instance_class     = var.instance_class
   engine             = "aurora-mysql"
 
-  performance_insights_enabled = true
+  performance_insights_enabled = false
 
   tags = {
     Name        = "${var.project_name}-aurora-instance-${count.index + 1}"
