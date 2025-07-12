@@ -83,7 +83,7 @@ module "ecr" {
   project_name                    = var.project_name
   environment                     = var.environment
   enable_cross_region_replication = false
-  check_existing                  = false  # ✅ Always create new repo in DR region
+ 
 }
 
 # Create RDS Aurora - either read replica or standalone

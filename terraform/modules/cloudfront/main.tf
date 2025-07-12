@@ -73,23 +73,23 @@ resource "aws_cloudfront_distribution" "failover" {
 
   # Default cache behavior - Points to primary origin and allows all methods
   default_cache_behavior {
-    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "primary-alb"  # Use primary origin directly
-    compress               = true
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "primary-alb" # Use primary origin directly
+    compress         = true
 
     forwarded_values {
       query_string = true
-      headers      = ["*"]  # Forward all headers
+      headers      = ["*"] # Forward all headers
 
       cookies {
-        forward = "all"  # Forward all cookies for session management
+        forward = "all" # Forward all cookies for session management
       }
     }
 
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
-    default_ttl            = 0    # No caching for dynamic content
+    default_ttl            = 0 # No caching for dynamic content
     max_ttl                = 86400
   }
 
@@ -181,23 +181,23 @@ resource "aws_cloudfront_distribution" "failover" {
 
   # Custom error pages
   custom_error_response {
-    error_code         = 502
-    response_code      = 503
-    response_page_path = "/error.html"
+    error_code            = 502
+    response_code         = 503
+    response_page_path    = "/error.html"
     error_caching_min_ttl = 10
   }
 
   custom_error_response {
-    error_code         = 503
-    response_code      = 503
-    response_page_path = "/error.html"
+    error_code            = 503
+    response_code         = 503
+    response_page_path    = "/error.html"
     error_caching_min_ttl = 10
   }
 
   custom_error_response {
-    error_code         = 504
-    response_code      = 504
-    response_page_path = "/error.html"
+    error_code            = 504
+    response_code         = 504
+    response_page_path    = "/error.html"
     error_caching_min_ttl = 10
   }
 
