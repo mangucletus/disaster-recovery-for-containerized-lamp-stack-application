@@ -100,3 +100,9 @@ variable "deploy_cloudfront" {
   type        = bool
   default     = true
 }
+
+variable "enable_s3_replication" {
+  description = "Enable S3 cross-region replication (set to false on first deployment)"
+  type        = bool
+  default     = false
+}

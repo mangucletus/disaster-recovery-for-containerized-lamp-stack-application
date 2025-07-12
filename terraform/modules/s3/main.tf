@@ -3,6 +3,12 @@
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
+# Get current region for ALB logs
+data "aws_region" "current" {}
+
+# Get ELB service account for ALB logs
+data "aws_elb_service_account" "current" {}
+
 # S3 bucket for application assets
 resource "aws_s3_bucket" "assets" {
   bucket = "${var.project_name}-assets-${var.environment}-${data.aws_caller_identity.current.account_id}"
@@ -41,6 +47,35 @@ resource "aws_s3_bucket_public_access_block" "assets" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# Bucket policy for ALB access logs
+resource "aws_s3_bucket_policy" "assets_alb_logs" {
+  bucket = aws_s3_bucket.assets.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ALBAccessLogs"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.current.arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.assets.arn}/alb-logs/*"
+      },
+      {
+        Sid    = "ALBAccessLogsBucketACL"
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.assets.arn
+      }
+    ]
+  })
 }
 
 # Lifecycle policy for cost optimization
@@ -115,7 +150,8 @@ resource "aws_iam_role_policy" "replication" {
         Effect = "Allow"
         Action = [
           "s3:GetObjectVersionForReplication",
-          "s3:GetObjectVersionAcl"
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
         ]
         Resource = "${aws_s3_bucket.assets.arn}/*"
       },
@@ -123,7 +159,8 @@ resource "aws_iam_role_policy" "replication" {
         Effect = "Allow"
         Action = [
           "s3:ReplicateObject",
-          "s3:ReplicateDelete"
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
         ]
         Resource = "${var.destination_bucket_arn}/*"
       }
@@ -131,9 +168,9 @@ resource "aws_iam_role_policy" "replication" {
   })
 }
 
-# Replication configuration (only in primary region)
+# Replication configuration (only in primary region and if destination exists)
 resource "aws_s3_bucket_replication_configuration" "assets" {
-  count = var.enable_replication ? 1 : 0
+  count = var.enable_replication && var.destination_bucket_arn != "" ? 1 : 0
 
   role   = aws_iam_role.replication[0].arn
   bucket = aws_s3_bucket.assets.id
@@ -197,7 +234,7 @@ resource "aws_s3_bucket_public_access_block" "backups" {
   restrict_public_buckets = true
 }
 
-# Backup bucket lifecycle
+# Backup bucket lifecycle - Fixed transition days
 resource "aws_s3_bucket_lifecycle_configuration" "backups" {
   bucket = aws_s3_bucket.backups.id
 
@@ -207,12 +244,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
     filter {}
 
     transition {
-      days          = 7
+      days          = 30  # Changed from 7 to meet minimum requirement
       storage_class = "STANDARD_IA"
     }
 
     transition {
-      days          = 30
+      days          = 60  # Changed from 30 to be after STANDARD_IA
       storage_class = "GLACIER"
     }
 

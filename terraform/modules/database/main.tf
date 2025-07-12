@@ -12,13 +12,20 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
+# Get available Aurora MySQL versions
+data "aws_rds_engine_version" "aurora_mysql" {
+  engine       = "aurora-mysql"
+  version      = "8.0"
+  default_only = true
+}
+
 # Aurora Cluster (Primary or DR)
 resource "aws_rds_cluster" "main" {
   count = var.is_read_replica ? 0 : 1
 
   cluster_identifier = "${var.project_name}-aurora-cluster"
   engine             = "aurora-mysql"
-  engine_version     = "8.0.mysql_aurora.3.02.0"
+  engine_version     = data.aws_rds_engine_version.aurora_mysql.version
   database_name      = var.database_name
   master_username    = var.master_username
   master_password    = var.master_password
@@ -30,7 +37,7 @@ resource "aws_rds_cluster" "main" {
   preferred_backup_window      = "07:00-09:00"
   preferred_maintenance_window = "wed:05:00-wed:06:00"
 
-  # Enable backtrack for Aurora MySQL
+  # Enable backtrack for Aurora MySQL (if supported by the version)
   backtrack_window = 24
 
   # Enable encryption
@@ -43,6 +50,12 @@ resource "aws_rds_cluster" "main" {
   tags = {
     Name        = "${var.project_name}-aurora-cluster"
     Environment = var.environment
+  }
+
+  lifecycle {
+    ignore_changes = [
+      engine_version  # Ignore minor version updates
+    ]
   }
 }
 
@@ -69,7 +82,7 @@ resource "aws_rds_cluster" "read_replica" {
 
   cluster_identifier            = "${var.project_name}-aurora-cluster-replica"
   engine                        = "aurora-mysql"
-  engine_version                = "8.0.mysql_aurora.3.02.0"
+  engine_version                = data.aws_rds_engine_version.aurora_mysql.version
   replication_source_identifier = var.source_cluster_arn
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -83,6 +96,12 @@ resource "aws_rds_cluster" "read_replica" {
     Name        = "${var.project_name}-aurora-cluster-replica"
     Environment = var.environment
     Type        = "ReadReplica"
+  }
+
+  lifecycle {
+    ignore_changes = [
+      engine_version  # Ignore minor version updates
+    ]
   }
 }
 
@@ -104,11 +123,15 @@ resource "aws_rds_cluster_instance" "read_replica" {
 
 # Store the database password in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
-  name = "${var.project_name}-db-password-${var.environment}"
+  name_prefix = "${var.project_name}-db-password-${var.environment}-"
 
   tags = {
     Name        = "${var.project_name}-db-password"
     Environment = var.environment
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

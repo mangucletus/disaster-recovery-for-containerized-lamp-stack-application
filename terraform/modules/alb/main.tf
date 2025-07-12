@@ -11,9 +11,10 @@ resource "aws_lb" "main" {
   # Enable deletion protection for production
   enable_deletion_protection = var.environment == "production" ? true : false
 
-  # Enable access logs
+  # Disable access logs by default to avoid permission issues
+  # Enable only if bucket exists and has proper permissions
   dynamic "access_logs" {
-    for_each = var.enable_access_logs ? [1] : []
+    for_each = var.enable_access_logs && var.access_logs_bucket != "" ? [1] : []
     content {
       bucket  = var.access_logs_bucket
       prefix  = "alb-logs"
@@ -26,6 +27,29 @@ resource "aws_lb" "main" {
     Environment = var.environment
   }
 }
+
+# S3 bucket policy for ALB access logs (only if enabled)
+resource "aws_s3_bucket_policy" "alb_logs" {
+  count  = var.enable_access_logs && var.access_logs_bucket != "" ? 1 : 0
+  bucket = var.access_logs_bucket
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "arn:aws:s3:::${var.access_logs_bucket}/alb-logs/*"
+      }
+    ]
+  })
+}
+
+# Get the AWS ELB service account for the current region
+data "aws_elb_service_account" "main" {}
 
 # Target Group
 resource "aws_lb_target_group" "main" {

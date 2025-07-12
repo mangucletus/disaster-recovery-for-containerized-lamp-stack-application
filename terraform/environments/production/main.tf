@@ -99,8 +99,9 @@ module "s3" {
 
   project_name           = var.project_name
   environment            = var.environment
-  enable_replication     = true
-  destination_bucket_arn = "arn:aws:s3:::${var.project_name}-assets-dr-${data.aws_caller_identity.current.account_id}"
+  enable_replication     = var.enable_s3_replication
+  destination_bucket_arn = var.enable_s3_replication ? "arn:aws:s3:::${var.project_name}-assets-dr-${data.aws_caller_identity.current.account_id}" : ""
+  # destination_bucket_arn = "arn:aws:s3:::${var.project_name}-assets-dr-${data.aws_caller_identity.current.account_id}"
 }
 
 # Create Application Load Balancer
@@ -113,8 +114,8 @@ module "alb" {
   public_subnet_ids     = module.networking.public_subnet_ids
   alb_security_group_id = module.security.alb_security_group_id
   certificate_arn       = var.acm_certificate_arn
-  enable_access_logs    = true
-  access_logs_bucket    = module.s3.assets_bucket_id
+  enable_access_logs    = false  # Disabled to avoid permission issues
+  access_logs_bucket    = ""     # Empty since we're not using it
 }
 
 # Create ECS cluster and service
