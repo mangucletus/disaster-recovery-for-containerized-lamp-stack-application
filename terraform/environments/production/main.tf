@@ -249,7 +249,7 @@ module "lambda_failover" {
   depends_on = [module.cloudfront]
 }
 
-# CloudWatch Alarms for monitoring
+# CloudWatch Alarms for monitoring in the region
 resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
   alarm_name          = "${var.project_name}-ecs-cpu-high"
   comparison_operator = "GreaterThanThreshold"
