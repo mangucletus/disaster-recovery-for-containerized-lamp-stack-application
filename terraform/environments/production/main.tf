@@ -176,6 +176,23 @@ resource "aws_ssm_parameter" "primary_alb_dns" {
 #   depends_on = [aws_ssm_parameter.primary_alb_dns]
 # }
 # ✅ Use local variable with try() to avoid failure on first deployment
+
+# locals {
+#   dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
+
+#   dr_alb_dns = try(
+#     data.aws_ssm_parameter.dr_alb_dns.value,
+#     local.dr_alb_dns_fallback
+#   )
+# }
+
+# Only now define the data block (optional – not always needed)
+# data "aws_ssm_parameter" "dr_alb_dns" {
+#   provider = aws.dr
+#   name     = "/${var.project_name}/dr/alb-dns-name"
+# }
+
+
 locals {
   dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
 
@@ -185,13 +202,11 @@ locals {
   )
 }
 
-# Only now define the data block (optional – not always needed)
+# This must go AFTER the locals block
 data "aws_ssm_parameter" "dr_alb_dns" {
   provider = aws.dr
   name     = "/${var.project_name}/dr/alb-dns-name"
 }
-
-
 
 
 
