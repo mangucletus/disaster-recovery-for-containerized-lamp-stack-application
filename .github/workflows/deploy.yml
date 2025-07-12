@@ -221,7 +221,15 @@ jobs:
         terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
       continue-on-error: true
       timeout-minutes: 5
-    
+
+    # - name: Force Unlock Terraform State
+    #   working-directory: ./terraform/environments/production
+    #   env:
+    #     TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+    #   run: terraform force-unlock -force 480e701d-8953-d509-9e91-d3ad79bb6715
+    #   continue-on-error: true
+
+
     - name: Terraform Plan
       working-directory: ./terraform/environments/production
       env:
