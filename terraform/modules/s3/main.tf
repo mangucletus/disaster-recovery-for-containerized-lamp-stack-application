@@ -254,7 +254,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
     }
 
     transition {
-      days          = 90
+      days          = 150
       storage_class = "DEEP_ARCHIVE"
     }
 

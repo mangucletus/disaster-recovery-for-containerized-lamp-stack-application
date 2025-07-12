@@ -164,14 +164,36 @@ resource "aws_ssm_parameter" "primary_alb_dns" {
   value = module.alb.alb_dns_name
 }
 
+
+
+
 # Get DR ALB DNS from parameter store (created by DR deployment)
+# data "aws_ssm_parameter" "dr_alb_dns" {
+#   provider = aws.dr
+#   name     = "/${var.project_name}/dr/alb-dns-name"
+
+#   # This will fail on first run, so we make it optional
+#   depends_on = [aws_ssm_parameter.primary_alb_dns]
+# }
+# ✅ Use local variable with try() to avoid failure on first deployment
+locals {
+  dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
+
+  dr_alb_dns = try(
+    data.aws_ssm_parameter.dr_alb_dns.value,
+    local.dr_alb_dns_fallback
+  )
+}
+
+# Only now define the data block (optional – not always needed)
 data "aws_ssm_parameter" "dr_alb_dns" {
   provider = aws.dr
   name     = "/${var.project_name}/dr/alb-dns-name"
-
-  # This will fail on first run, so we make it optional
-  depends_on = [aws_ssm_parameter.primary_alb_dns]
 }
+
+
+
+
 
 # Create CloudFront distribution for automatic failover
 # NOTE: This should be deployed AFTER the DR environment is set up
