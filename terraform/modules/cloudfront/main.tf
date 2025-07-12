@@ -172,7 +172,7 @@ resource "aws_cloudfront_distribution" "failover" {
   tags = {
     Name        = "${var.project_name}-cloudfront"
     Environment = var.environment
-    Purpose     = "Primary Distribution (Manual DR Failover)"
+    Purpose     = "Primary Distribution - Manual DR Failover"
   }
 }
 
