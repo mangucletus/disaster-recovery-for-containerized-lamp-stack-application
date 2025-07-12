@@ -32,7 +32,7 @@ variable "certificate_arn" {
 variable "enable_access_logs" {
   description = "Enable ALB access logs"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "access_logs_bucket" {

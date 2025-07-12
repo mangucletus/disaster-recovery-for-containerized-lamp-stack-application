@@ -13,5 +13,5 @@ variable "environment" {
 variable "enable_cross_region_replication" {
   description = "Enable cross-region replication for DR"
   type        = bool
-  default     = false
+  default     = true
 }

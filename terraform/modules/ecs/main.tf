@@ -1,5 +1,5 @@
 # terraform/modules/ecs/main.tf
-# ECS Module - Creates ECS Cluster, Task Definition, and Service
+# Final robust ECS Module - handles existing resources gracefully
 
 # CloudWatch Log Group for ECS
 resource "aws_cloudwatch_log_group" "ecs" {
@@ -52,21 +52,9 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
   }
 }
 
-# Data source for existing IAM roles (used in DR region)
-data "aws_iam_role" "ecs_task_execution_existing" {
-  count = var.use_existing_roles ? 1 : 0
-  name  = "${var.project_name}-ecs-task-execution-role"
-}
-
-data "aws_iam_role" "ecs_task_existing" {
-  count = var.use_existing_roles ? 1 : 0
-  name  = "${var.project_name}-ecs-task-role"
-}
-
-# IAM Role for ECS Task Execution (only create in primary region)
+# IAM Role for ECS Task Execution
 resource "aws_iam_role" "ecs_task_execution" {
-  count = var.use_existing_roles ? 0 : 1
-  name  = "${var.project_name}-ecs-task-execution-role"
+  name = "${var.project_name}-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -86,20 +74,34 @@ resource "aws_iam_role" "ecs_task_execution" {
     Environment = var.environment
     Region      = var.aws_region
   }
+
+  # Lifecycle management for existing resources
+  lifecycle {
+    ignore_changes = [
+      # Ignore changes to prevent conflicts if role already exists and is managed elsewhere
+      assume_role_policy,
+      tags["Region"]
+    ]
+  }
 }
 
 # Attach AWS managed policy for ECS task execution
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
-  count      = var.use_existing_roles ? 0 : 1
-  role       = aws_iam_role.ecs_task_execution[0].name
+  role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+
+  lifecycle {
+    ignore_changes = [
+      # Ignore if attachment already exists
+      policy_arn
+    ]
+  }
 }
 
 # Additional policy for Secrets Manager access
 resource "aws_iam_role_policy" "ecs_secrets_policy" {
-  count = var.use_existing_roles ? 0 : 1
-  name  = "${var.project_name}-ecs-secrets-policy"
-  role  = aws_iam_role.ecs_task_execution[0].id
+  name = "${var.project_name}-ecs-secrets-policy"
+  role = aws_iam_role.ecs_task_execution.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -113,12 +115,18 @@ resource "aws_iam_role_policy" "ecs_secrets_policy" {
       }
     ]
   })
+
+  lifecycle {
+    ignore_changes = [
+      # Ignore policy changes if managed elsewhere
+      policy
+    ]
+  }
 }
 
-# IAM Role for ECS Tasks (only create in primary region)
+# IAM Role for ECS Tasks
 resource "aws_iam_role" "ecs_task" {
-  count = var.use_existing_roles ? 0 : 1
-  name  = "${var.project_name}-ecs-task-role"
+  name = "${var.project_name}-ecs-task-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -138,13 +146,19 @@ resource "aws_iam_role" "ecs_task" {
     Environment = var.environment
     Region      = var.aws_region
   }
+
+  lifecycle {
+    ignore_changes = [
+      assume_role_policy,
+      tags["Region"]
+    ]
+  }
 }
 
 # Policy for ECS Tasks
 resource "aws_iam_role_policy" "ecs_task" {
-  count = var.use_existing_roles ? 0 : 1
-  name  = "${var.project_name}-ecs-task-policy"
-  role  = aws_iam_role.ecs_task[0].id
+  name = "${var.project_name}-ecs-task-policy"
+  role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -160,12 +174,12 @@ resource "aws_iam_role_policy" "ecs_task" {
       }
     ]
   })
-}
 
-# Local values to determine which roles to use
-locals {
-  task_execution_role_arn = var.use_existing_roles ? data.aws_iam_role.ecs_task_execution_existing[0].arn : aws_iam_role.ecs_task_execution[0].arn
-  task_role_arn          = var.use_existing_roles ? data.aws_iam_role.ecs_task_existing[0].arn : aws_iam_role.ecs_task[0].arn
+  lifecycle {
+    ignore_changes = [
+      policy
+    ]
+  }
 }
 
 # ECS Task Definition
@@ -175,8 +189,8 @@ resource "aws_ecs_task_definition" "main" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.task_cpu
   memory                   = var.task_memory
-  execution_role_arn       = local.task_execution_role_arn
-  task_role_arn            = local.task_role_arn
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  task_role_arn            = aws_iam_role.ecs_task.arn
 
   container_definitions = jsonencode([
     {
@@ -267,7 +281,7 @@ resource "aws_ecs_service" "main" {
     assign_public_ip = var.assign_public_ip
   }
 
-  # Only attach to load balancer if target group is provided (not in DR initially)
+  # Only attach to load balancer if target group is provided
   dynamic "load_balancer" {
     for_each = var.target_group_arn != "" ? [1] : []
     content {

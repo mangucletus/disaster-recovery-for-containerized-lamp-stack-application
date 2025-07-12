@@ -11,7 +11,7 @@ variable "environment" {
 variable "enable_replication" {
   description = "Enable cross-region replication"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "destination_bucket_arn" {

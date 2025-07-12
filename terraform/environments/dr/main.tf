@@ -143,7 +143,7 @@ module "ecs" {
   task_cpu              = "256"
   task_memory           = "512"
   assign_public_ip      = true  # Need public IP since no NAT gateway
-  use_existing_roles = true
+ 
 }
 
 # Store DR endpoints for failover script and CloudFront

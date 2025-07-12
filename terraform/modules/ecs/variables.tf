@@ -91,11 +91,5 @@ variable "log_retention_days" {
 variable "assign_public_ip" {
   description = "Whether to assign public IP to tasks (needed for DR without NAT)"
   type        = bool
-  default     = false
-}
-
-variable "use_existing_roles" {
-  description = "Use existing IAM roles instead of creating new ones (for DR region)"
-  type        = bool
   default     = true
 }
