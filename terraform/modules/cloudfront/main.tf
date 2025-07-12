@@ -90,7 +90,7 @@ resource "aws_cloudfront_distribution" "failover" {
 
   # Default cache behavior
   default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"] 
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "alb-group" # Use the origin group
 
