@@ -1,19 +1,12 @@
-# ECR Module - Creates ECR repository for Docker images
+# terraform/modules/ecr/main.tf
+# Simplified version that always creates a repository (RECOMMENDED)
 
-# Get current AWS account ID
+# Get current AWS account ID and region
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
-# Check if ECR repository already exists
-data "aws_ecr_repository" "existing" {
-  count = var.check_existing ? 1 : 0
-  name  = var.project_name
-  
-}
-
-# ECR Repository
+# ECR Repository - Always create (GitHub Actions handles existence checking)
 resource "aws_ecr_repository" "main" {
-  count = var.check_existing && length(data.aws_ecr_repository.existing) > 0 ? 0 : 1
-  
   name                 = var.project_name
   image_tag_mutability = "MUTABLE"
 
@@ -30,12 +23,24 @@ resource "aws_ecr_repository" "main" {
   tags = {
     Name        = "${var.project_name}-ecr"
     Environment = var.environment
+    Region      = data.aws_region.current.name
+  }
+
+  # Handle case where repository might already exist
+  lifecycle {
+    prevent_destroy = false
+    ignore_changes = [
+      # Ignore changes to these if repository already exists
+      image_tag_mutability,
+      image_scanning_configuration,
+      encryption_configuration
+    ]
   }
 }
 
-# ECR Lifecycle Policy - Keep only last 10 images
+# ECR Lifecycle Policy
 resource "aws_ecr_lifecycle_policy" "main" {
-  repository = var.check_existing && length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].name : aws_ecr_repository.main[0].name
+  repository = aws_ecr_repository.main.name
 
   policy = jsonencode({
     rules = [
@@ -53,16 +58,12 @@ resource "aws_ecr_lifecycle_policy" "main" {
       }
     ]
   })
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
-# ECR Repository Policy - Allow cross-region replication for DR
+# ECR Repository Policy - Allow cross-region access for DR
 resource "aws_ecr_repository_policy" "cross_region" {
   count      = var.enable_cross_region_replication ? 1 : 0
-  repository = var.check_existing && length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].name : aws_ecr_repository.main[0].name
+  repository = aws_ecr_repository.main.name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -76,16 +77,13 @@ resource "aws_ecr_repository_policy" "cross_region" {
         Action = [
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability"
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetRepositoryPolicy",
+          "ecr:DescribeRepositories",
+          "ecr:ListImages",
+          "ecr:DescribeImages"
         ]
       }
     ]
   })
-}
-
-# Output the repository URL regardless of whether it was created or already existed
-locals {
-  repository_url = var.check_existing && length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].repository_url : aws_ecr_repository.main[0].repository_url
-  repository_arn = var.check_existing && length(data.aws_ecr_repository.existing) > 0 ? data.aws_ecr_repository.existing[0].arn : aws_ecr_repository.main[0].arn
-  repository_name = var.project_name
 }

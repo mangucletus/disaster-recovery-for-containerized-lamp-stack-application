@@ -1,3 +1,5 @@
+# terraform/environments/dr/variables.tf
+
 # Project configuration
 variable "project_name" {
   description = "Name of the project"
@@ -74,16 +76,8 @@ variable "acm_certificate_arn" {
   default     = ""
 }
 
-
-
 variable "skip_read_replica" {
   description = "Skip creating read replica (for first deployment when production doesn't exist)"
-  type        = bool
-  default     = false
-}
-
-variable "check_existing" {
-  description = "Whether to check for existing ECR repository instead of creating a new one"
   type        = bool
   default     = false
 }

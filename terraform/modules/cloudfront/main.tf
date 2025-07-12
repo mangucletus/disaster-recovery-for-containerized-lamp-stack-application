@@ -88,25 +88,48 @@ resource "aws_cloudfront_distribution" "failover" {
     }
   }
 
-  # Default cache behavior
+  # Default cache behavior - FIXED to allow POST methods
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"] 
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]  # ✅ Added POST and other methods
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "alb-group" # Use the origin group
+    target_origin_id = "alb-group"
 
     forwarded_values {
       query_string = true
-      headers      = ["*"]
+      headers      = ["*"]  # Forward all headers
 
       cookies {
-        forward = "all"
+        forward = "all"  # Forward all cookies for session management
       }
     }
 
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
-    default_ttl            = 0
-    max_ttl                = 0
+    default_ttl            = 0    # No caching for dynamic content
+    max_ttl                = 86400
+    compress               = true
+  }
+
+  # Cache behavior for static assets (if any)
+  ordered_cache_behavior {
+    path_pattern     = "/assets/*"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "alb-group"
+
+    forwarded_values {
+      query_string = false
+      headers      = ["Origin"]
+
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 86400
+    max_ttl                = 31536000
     compress               = true
   }
 
@@ -138,9 +161,6 @@ resource "aws_cloudfront_distribution" "failover" {
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-
-  # Web ACL for additional security (optional)
-  # web_acl_id = var.web_acl_id
 
   tags = {
     Name        = "${var.project_name}-cloudfront"
