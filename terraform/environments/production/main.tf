@@ -205,7 +205,9 @@ module "cloudfront" {
   environment          = var.environment
   primary_alb_dns_name = module.alb.alb_dns_name
   primary_alb_arn      = module.alb.alb_arn
-  dr_alb_dns_name      = try(data.aws_ssm_parameter.dr_alb_dns.value, "placeholder.elb.eu-west-1.amazonaws.com")
+  dr_alb_dns_name = local.dr_alb_dns
+
+  #dr_alb_dns_name      = try(data.aws_ssm_parameter.dr_alb_dns.value, "placeholder.elb.eu-west-1.amazonaws.com")
   primary_region       = var.aws_region
   dr_region            = "eu-west-1"
 }
