@@ -1,3 +1,4 @@
+# terraform/modules/ecs/main.tf
 # ECS Module - Creates ECS Cluster, Task Definition, and Service
 
 # CloudWatch Log Group for ECS
@@ -51,9 +52,21 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
   }
 }
 
-# IAM Role for ECS Task Execution
+# Data source for existing IAM roles (used in DR region)
+data "aws_iam_role" "ecs_task_execution_existing" {
+  count = var.use_existing_roles ? 1 : 0
+  name  = "${var.project_name}-ecs-task-execution-role"
+}
+
+data "aws_iam_role" "ecs_task_existing" {
+  count = var.use_existing_roles ? 1 : 0
+  name  = "${var.project_name}-ecs-task-role"
+}
+
+# IAM Role for ECS Task Execution (only create in primary region)
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "${var.project_name}-ecs-task-execution-role"
+  count = var.use_existing_roles ? 0 : 1
+  name  = "${var.project_name}-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -71,19 +84,22 @@ resource "aws_iam_role" "ecs_task_execution" {
   tags = {
     Name        = "${var.project_name}-ecs-task-execution-role"
     Environment = var.environment
+    Region      = var.aws_region
   }
 }
 
 # Attach AWS managed policy for ECS task execution
 resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
-  role       = aws_iam_role.ecs_task_execution.name
+  count      = var.use_existing_roles ? 0 : 1
+  role       = aws_iam_role.ecs_task_execution[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
 # Additional policy for Secrets Manager access
 resource "aws_iam_role_policy" "ecs_secrets_policy" {
-  name = "${var.project_name}-ecs-secrets-policy"
-  role = aws_iam_role.ecs_task_execution.id
+  count = var.use_existing_roles ? 0 : 1
+  name  = "${var.project_name}-ecs-secrets-policy"
+  role  = aws_iam_role.ecs_task_execution[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -99,9 +115,10 @@ resource "aws_iam_role_policy" "ecs_secrets_policy" {
   })
 }
 
-# IAM Role for ECS Tasks
+# IAM Role for ECS Tasks (only create in primary region)
 resource "aws_iam_role" "ecs_task" {
-  name = "${var.project_name}-ecs-task-role"
+  count = var.use_existing_roles ? 0 : 1
+  name  = "${var.project_name}-ecs-task-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -119,13 +136,15 @@ resource "aws_iam_role" "ecs_task" {
   tags = {
     Name        = "${var.project_name}-ecs-task-role"
     Environment = var.environment
+    Region      = var.aws_region
   }
 }
 
 # Policy for ECS Tasks
 resource "aws_iam_role_policy" "ecs_task" {
-  name = "${var.project_name}-ecs-task-policy"
-  role = aws_iam_role.ecs_task.id
+  count = var.use_existing_roles ? 0 : 1
+  name  = "${var.project_name}-ecs-task-policy"
+  role  = aws_iam_role.ecs_task[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -143,6 +162,12 @@ resource "aws_iam_role_policy" "ecs_task" {
   })
 }
 
+# Local values to determine which roles to use
+locals {
+  task_execution_role_arn = var.use_existing_roles ? data.aws_iam_role.ecs_task_execution_existing[0].arn : aws_iam_role.ecs_task_execution[0].arn
+  task_role_arn          = var.use_existing_roles ? data.aws_iam_role.ecs_task_existing[0].arn : aws_iam_role.ecs_task[0].arn
+}
+
 # ECS Task Definition
 resource "aws_ecs_task_definition" "main" {
   family                   = var.project_name
@@ -150,8 +175,8 @@ resource "aws_ecs_task_definition" "main" {
   requires_compatibilities = ["FARGATE"]
   cpu                      = var.task_cpu
   memory                   = var.task_memory
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  task_role_arn            = aws_iam_role.ecs_task.arn
+  execution_role_arn       = local.task_execution_role_arn
+  task_role_arn            = local.task_role_arn
 
   container_definitions = jsonencode([
     {
@@ -177,6 +202,10 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "DB_PORT"
           value = "3306"
+        },
+        {
+          name  = "AWS_REGION"
+          value = var.aws_region
         }
       ]
 

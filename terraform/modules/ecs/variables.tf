@@ -1,3 +1,5 @@
+# terraform/modules/ecs/variables.tf
+
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -86,11 +88,14 @@ variable "log_retention_days" {
   default     = 7
 }
 
-# Add to terraform/modules/ecs/variables.tf:
-
 variable "assign_public_ip" {
   description = "Whether to assign public IP to tasks (needed for DR without NAT)"
   type        = bool
   default     = false
 }
 
+variable "use_existing_roles" {
+  description = "Use existing IAM roles instead of creating new ones (for DR region)"
+  type        = bool
+  default     = true
+}

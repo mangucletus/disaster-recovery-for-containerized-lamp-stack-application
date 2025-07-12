@@ -137,6 +137,7 @@ module "ecs" {
   max_capacity          = 10
   task_cpu              = "256"
   task_memory           = "512"
+  use_existing_roles = true
 }
 
 # Store important outputs in Parameter Store for DR region and Lambda
