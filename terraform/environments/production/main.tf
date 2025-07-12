@@ -193,21 +193,25 @@ resource "aws_ssm_parameter" "primary_alb_dns" {
 # }
 
 
-locals {
-  dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
+# locals {
+#   dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
 
-  dr_alb_dns = try(
-    data.aws_ssm_parameter.dr_alb_dns.value,
-    local.dr_alb_dns_fallback
-  )
-}
+#   dr_alb_dns = try(
+#     data.aws_ssm_parameter.dr_alb_dns.value,
+#     local.dr_alb_dns_fallback
+#   )
+# }
 
 # This must go AFTER the locals block
-data "aws_ssm_parameter" "dr_alb_dns" {
-  provider = aws.dr
-  name     = "/${var.project_name}/dr/alb-dns-name"
-}
+# data "aws_ssm_parameter" "dr_alb_dns" {
+#   provider = aws.dr
+#   name     = "/${var.project_name}/dr/alb-dns-name"
+# }
 
+locals {
+  # DR ALB DNS fallback value used on first deploy
+  dr_alb_dns_name = "placeholder.elb.eu-west-1.amazonaws.com"
+}
 
 
 # Create CloudFront distribution for automatic failover
@@ -220,7 +224,7 @@ module "cloudfront" {
   environment          = var.environment
   primary_alb_dns_name = module.alb.alb_dns_name
   primary_alb_arn      = module.alb.alb_arn
-  dr_alb_dns_name = local.dr_alb_dns
+  dr_alb_dns_name = local.dr_alb_dns_name
 
   #dr_alb_dns_name      = try(data.aws_ssm_parameter.dr_alb_dns.value, "placeholder.elb.eu-west-1.amazonaws.com")
   primary_region       = var.aws_region
