@@ -179,19 +179,8 @@ jobs:
         # Push to DR region
         docker push $ECR_REGISTRY_DR/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY_DR/$ECR_REPOSITORY:latest
-    
-    - name: Output image URIs
-      id: image
-      env:
-        ECR_REGISTRY_PRIMARY: ${{ steps.login-ecr-primary.outputs.registry }}
-        ECR_REGISTRY_DR: ${{ steps.login-ecr-dr.outputs.registry }}
-        ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        echo "primary_uri=$ECR_REGISTRY_PRIMARY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-        echo "dr_uri=$ECR_REGISTRY_DR/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-  # Deploy production infrastructure FIRST (changed order)
+  # Deploy production infrastructure
   deploy-production:
     name: Deploy Production Infrastructure
     runs-on: ubuntu-latest
@@ -218,6 +207,18 @@ jobs:
       working-directory: ./terraform/environments/production
       run: terraform init
     
+    # ✅ AUTO-IMPORT EXISTING IAM ROLES (Production)
+    - name: Import Existing IAM Roles (Production)
+      working-directory: ./terraform/environments/production
+      run: |
+        echo "🔄 Importing existing IAM roles if they exist..."
+        terraform import module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
+        terraform import module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
+        terraform import module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
+        terraform import 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
+        terraform import 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
+      continue-on-error: true
+    
     - name: Terraform Plan
       working-directory: ./terraform/environments/production
       env:
@@ -230,7 +231,7 @@ jobs:
         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
       run: terraform apply -auto-approve tfplan
 
-  # Deploy DR infrastructure AFTER production
+  # Deploy DR infrastructure
   deploy-dr:
     name: Deploy DR Infrastructure
     runs-on: ubuntu-latest
@@ -268,6 +269,18 @@ jobs:
       working-directory: ./terraform/environments/dr
       run: terraform init
     
+    # ✅ AUTO-IMPORT EXISTING IAM ROLES (DR)
+    - name: Import Existing IAM Roles (DR)
+      working-directory: ./terraform/environments/dr
+      run: |
+        echo "🔄 Importing existing IAM roles if they exist..."
+        terraform import module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
+        terraform import module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
+        terraform import module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
+        terraform import 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
+        terraform import 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
+      continue-on-error: true
+    
     - name: Terraform Plan
       working-directory: ./terraform/environments/dr
       env:
@@ -281,13 +294,6 @@ jobs:
         TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
         TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
       run: terraform apply -auto-approve tfplan
-    
-    - name: Get DR ALB DNS
-      id: dr-alb
-      working-directory: ./terraform/environments/dr
-      run: |
-        DR_ALB_DNS=$(terraform output -raw alb_dns_name)
-        echo "dns=$DR_ALB_DNS" >> $GITHUB_OUTPUT
 
   # Update ECS services with new image
   update-services:
@@ -375,12 +381,14 @@ jobs:
         echo "### Production Region (eu-central-1)"
         echo "- Status: ✅ Deployed"
         echo "- ECR: ✅ Images pushed"
+        echo "- IAM Roles: ✅ Auto-imported if existing"
         echo ""
         echo "### DR Region (eu-west-1)"
         echo "- Status: ✅ Ready (Pilot Light Mode)"
         echo "- ECS Tasks: 0 (Cost Optimization)"
         echo "- RDS: Read Replica Active"
         echo "- ECR: ✅ Images replicated"
+        echo "- IAM Roles: ✅ Auto-imported if existing"
         echo ""
         echo "### Access Information"
         if [ "${{ steps.cloudfront.outputs.url }}" != "Not deployed yet" ]; then
@@ -388,7 +396,7 @@ jobs:
         else
           echo "- CloudFront URL: Will be available after full deployment"
         fi
-        echo "- Failover: Automatic via CloudFront origin groups"
+        echo "- Failover: Manual via CloudFront script"
         echo ""
         echo "### Monitoring"
         echo "- Production Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=${{ env.PROJECT_NAME }}-production-dashboard"
