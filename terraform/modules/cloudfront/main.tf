@@ -25,11 +25,11 @@ resource "aws_sns_topic" "failover_notifications" {
   name = "${var.project_name}-failover-notifications"
 }
 
-# CloudFront distribution with origin failover
+# CloudFront distribution WITHOUT origin groups (to allow POST methods)
 resource "aws_cloudfront_distribution" "failover" {
   enabled         = true
   is_ipv6_enabled = true
-  comment         = "${var.project_name} - Automatic Failover Distribution"
+  comment         = "${var.project_name} - Distribution with Manual Failover"
 
   # Primary origin - Production ALB
   origin {
@@ -51,7 +51,7 @@ resource "aws_cloudfront_distribution" "failover" {
     }
   }
 
-  # Secondary origin - DR ALB
+  # Secondary origin - DR ALB (for manual failover)
   origin {
     domain_name = var.dr_alb_dns_name
     origin_id   = "dr-alb"
@@ -71,28 +71,12 @@ resource "aws_cloudfront_distribution" "failover" {
     }
   }
 
-  # Origin group with automatic failover
-  origin_group {
-    origin_id = "alb-group"
-
-    failover_criteria {
-      status_codes = [500, 502, 503, 504, 403, 404]
-    }
-
-    member {
-      origin_id = "primary-alb"
-    }
-
-    member {
-      origin_id = "dr-alb"
-    }
-  }
-
-  # Default cache behavior - FIXED to allow POST methods
+  # Default cache behavior - Points to primary origin and allows all methods
   default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]  # ✅ Added POST and other methods
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "alb-group"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "primary-alb"  # Use primary origin directly
+    compress               = true
 
     forwarded_values {
       query_string = true
@@ -107,15 +91,14 @@ resource "aws_cloudfront_distribution" "failover" {
     min_ttl                = 0
     default_ttl            = 0    # No caching for dynamic content
     max_ttl                = 86400
-    compress               = true
   }
 
-  # Cache behavior for static assets (if any)
+  # Cache behavior for static assets
   ordered_cache_behavior {
     path_pattern     = "/assets/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "alb-group"
+    target_origin_id = "primary-alb"
 
     forwarded_values {
       query_string = false
@@ -133,23 +116,47 @@ resource "aws_cloudfront_distribution" "failover" {
     compress               = true
   }
 
-  # Custom error pages for better failover experience
+  # Cache behavior for CSS/JS/Images
+  ordered_cache_behavior {
+    path_pattern     = "*.{css,js,png,jpg,jpeg,gif,ico,svg}"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "primary-alb"
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 86400
+    default_ttl            = 86400
+    max_ttl                = 31536000
+    compress               = true
+  }
+
+  # Custom error pages
   custom_error_response {
     error_code         = 502
-    response_code      = 200
-    response_page_path = "/index.php"
+    response_code      = 503
+    response_page_path = "/error.html"
+    error_caching_min_ttl = 10
   }
 
   custom_error_response {
     error_code         = 503
-    response_code      = 200
-    response_page_path = "/index.php"
+    response_code      = 503
+    response_page_path = "/error.html"
+    error_caching_min_ttl = 10
   }
 
   custom_error_response {
     error_code         = 504
-    response_code      = 200
-    response_page_path = "/index.php"
+    response_code      = 504
+    response_page_path = "/error.html"
+    error_caching_min_ttl = 10
   }
 
   restrictions {
@@ -165,7 +172,7 @@ resource "aws_cloudfront_distribution" "failover" {
   tags = {
     Name        = "${var.project_name}-cloudfront"
     Environment = var.environment
-    Purpose     = "Automatic DR Failover"
+    Purpose     = "Primary Distribution (Manual DR Failover)"
   }
 }
 

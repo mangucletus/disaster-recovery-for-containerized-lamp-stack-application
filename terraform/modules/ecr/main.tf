@@ -1,46 +1,18 @@
 # terraform/modules/ecr/main.tf
-# Simplified version that always creates a repository (RECOMMENDED)
+# Use existing ECR repository created by GitHub Actions
 
 # Get current AWS account ID and region
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# ECR Repository - Always create (GitHub Actions handles existence checking)
-resource "aws_ecr_repository" "main" {
-  name                 = var.project_name
-  image_tag_mutability = "MUTABLE"
-
-  # Enable image scanning on push
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  # Encryption configuration
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-
-  tags = {
-    Name        = "${var.project_name}-ecr"
-    Environment = var.environment
-    Region      = data.aws_region.current.name
-  }
-
-  # Handle case where repository might already exist
-  lifecycle {
-    prevent_destroy = false
-    ignore_changes = [
-      # Ignore changes to these if repository already exists
-      image_tag_mutability,
-      image_scanning_configuration,
-      encryption_configuration
-    ]
-  }
+# Reference existing ECR repository (created by GitHub Actions)
+data "aws_ecr_repository" "main" {
+  name = var.project_name
 }
 
-# ECR Lifecycle Policy
+# ECR Lifecycle Policy (only if we want to manage it via Terraform)
 resource "aws_ecr_lifecycle_policy" "main" {
-  repository = aws_ecr_repository.main.name
+  repository = data.aws_ecr_repository.main.name
 
   policy = jsonencode({
     rules = [
@@ -63,7 +35,7 @@ resource "aws_ecr_lifecycle_policy" "main" {
 # ECR Repository Policy - Allow cross-region access for DR
 resource "aws_ecr_repository_policy" "cross_region" {
   count      = var.enable_cross_region_replication ? 1 : 0
-  repository = aws_ecr_repository.main.name
+  repository = data.aws_ecr_repository.main.name
 
   policy = jsonencode({
     Version = "2012-10-17"
