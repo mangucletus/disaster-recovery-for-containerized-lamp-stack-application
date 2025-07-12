@@ -210,14 +210,17 @@ jobs:
     # ✅ AUTO-IMPORT EXISTING IAM ROLES (Production)
     - name: Import Existing IAM Roles (Production)
       working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
       run: |
         echo "🔄 Importing existing IAM roles if they exist..."
-        terraform import module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
-        terraform import module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
-        terraform import module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
-        terraform import 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
-        terraform import 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
       continue-on-error: true
+      timeout-minutes: 5
     
     - name: Terraform Plan
       working-directory: ./terraform/environments/production
@@ -272,14 +275,18 @@ jobs:
     # ✅ AUTO-IMPORT EXISTING IAM ROLES (DR)
     - name: Import Existing IAM Roles (DR)
       working-directory: ./terraform/environments/dr
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+        TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
       run: |
         echo "🔄 Importing existing IAM roles if they exist..."
-        terraform import module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
-        terraform import module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
-        terraform import module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
-        terraform import 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
-        terraform import 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
       continue-on-error: true
+      timeout-minutes: 5
     
     - name: Terraform Plan
       working-directory: ./terraform/environments/dr
