@@ -82,3 +82,8 @@ variable "skip_read_replica" {
   default     = false
 }
 
+variable "check_existing" {
+  description = "Whether to check for existing ECR repository instead of creating a new one"
+  type        = bool
+  default     = false
+}

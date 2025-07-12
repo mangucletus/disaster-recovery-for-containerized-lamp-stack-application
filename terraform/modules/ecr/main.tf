@@ -7,6 +7,7 @@ data "aws_caller_identity" "current" {}
 data "aws_ecr_repository" "existing" {
   count = var.check_existing ? 1 : 0
   name  = var.project_name
+  
 }
 
 # ECR Repository
