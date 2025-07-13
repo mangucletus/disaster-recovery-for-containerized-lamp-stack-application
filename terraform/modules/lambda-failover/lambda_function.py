@@ -234,18 +234,27 @@ def wait_for_ecs_health():
     
     raise Exception("ECS service failed to become healthy within timeout")
 
+# ✅ FIX 1: Updated parameter references with fallback logic
 def get_primary_target_group_arn():
     """
     Get primary ALB target group ARN from parameter store
     """
     try:
+        # First try production parameter naming (standardized)
         response = ssm.get_parameter(
-            Name=f"/{os.environ['PROJECT_NAME']}/primary/target-group-arn"
+            Name=f"/{os.environ['PROJECT_NAME']}/production/target-group-arn"
         )
         return response['Parameter']['Value']
     except:
-        # Fallback: construct ARN
-        return f"arn:aws:elasticloadbalancing:{os.environ['PRIMARY_REGION']}:*:targetgroup/{os.environ['PROJECT_NAME']}-tg/*"
+        # Fallback to primary naming for backward compatibility
+        try:
+            response = ssm.get_parameter(
+                Name=f"/{os.environ['PROJECT_NAME']}/primary/target-group-arn"
+            )
+            return response['Parameter']['Value']
+        except:
+            # Final fallback: construct ARN
+            return f"arn:aws:elasticloadbalancing:{os.environ['PRIMARY_REGION']}:*:targetgroup/{os.environ['PROJECT_NAME']}-tg/*"
 
 def update_failover_metrics():
     """
@@ -295,5 +304,3 @@ def send_notification(subject, message):
         Subject=subject,
         Message=message
     )
-
-    

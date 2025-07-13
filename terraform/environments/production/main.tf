@@ -101,7 +101,6 @@ module "s3" {
   environment            = var.environment
   enable_replication     = var.enable_s3_replication
   destination_bucket_arn = var.enable_s3_replication ? "arn:aws:s3:::${var.project_name}-assets-dr-${data.aws_caller_identity.current.account_id}" : ""
-  # destination_bucket_arn = "arn:aws:s3:::${var.project_name}-assets-dr-${data.aws_caller_identity.current.account_id}"
 }
 
 # Create Application Load Balancer
@@ -137,7 +136,25 @@ module "ecs" {
   max_capacity          = 10
   task_cpu              = "256"
   task_memory           = "512"
+}
 
+# ✅ FIX 1: Store ALB DNS with PRODUCTION naming (standardized)
+resource "aws_ssm_parameter" "production_alb_dns" {
+  name  = "/${var.project_name}/production/alb-dns-name"
+  type  = "String"
+  value = module.alb.alb_dns_name
+  
+  tags = {
+    Environment = var.environment
+    Purpose     = "Production ALB DNS for CloudFront failover"
+  }
+}
+
+# Keep primary parameter for backward compatibility
+resource "aws_ssm_parameter" "primary_alb_dns" {
+  name  = "/${var.project_name}/primary/alb-dns-name"
+  type  = "String"
+  value = module.alb.alb_dns_name
 }
 
 # Store important outputs in Parameter Store for DR region and Lambda
@@ -153,71 +170,26 @@ resource "aws_ssm_parameter" "ecr_repository_url" {
   value = module.ecr.repository_url
 }
 
+# ✅ FIX 1: Store target group ARN with PRODUCTION naming
+resource "aws_ssm_parameter" "production_target_group_arn" {
+  name  = "/${var.project_name}/production/target-group-arn"
+  type  = "String"
+  value = module.alb.target_group_arn
+}
+
+# Keep primary parameter for backward compatibility
 resource "aws_ssm_parameter" "target_group_arn" {
   name  = "/${var.project_name}/primary/target-group-arn"
   type  = "String"
   value = module.alb.target_group_arn
 }
 
-resource "aws_ssm_parameter" "primary_alb_dns" {
-  name  = "/${var.project_name}/primary/alb-dns-name"
-  type  = "String"
-  value = module.alb.alb_dns_name
-}
-
-
-
-
-# Get DR ALB DNS from parameter store (created by DR deployment)
-# data "aws_ssm_parameter" "dr_alb_dns" {
-#   provider = aws.dr
-#   name     = "/${var.project_name}/dr/alb-dns-name"
-
-#   # This will fail on first run, so we make it optional
-#   depends_on = [aws_ssm_parameter.primary_alb_dns]
-# }
-# ✅ Use local variable with try() to avoid failure on first deployment
-
-# locals {
-#   dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
-
-#   dr_alb_dns = try(
-#     data.aws_ssm_parameter.dr_alb_dns.value,
-#     local.dr_alb_dns_fallback
-#   )
-# }
-
-# Only now define the data block (optional – not always needed)
-# data "aws_ssm_parameter" "dr_alb_dns" {
-#   provider = aws.dr
-#   name     = "/${var.project_name}/dr/alb-dns-name"
-# }
-
-
-# locals {
-#   dr_alb_dns_fallback = "placeholder.elb.eu-west-1.amazonaws.com"
-
-#   dr_alb_dns = try(
-#     data.aws_ssm_parameter.dr_alb_dns.value,
-#     local.dr_alb_dns_fallback
-#   )
-# }
-
-# This must go AFTER the locals block
-# data "aws_ssm_parameter" "dr_alb_dns" {
-#   provider = aws.dr
-#   name     = "/${var.project_name}/dr/alb-dns-name"
-# }
-
 locals {
   # DR ALB DNS fallback value used on first deploy
   dr_alb_dns_name = "placeholder.elb.eu-west-1.amazonaws.com"
 }
 
-
 # Create CloudFront distribution for automatic failover
-# NOTE: This should be deployed AFTER the DR environment is set up
-# Comment this out on first deployment, then uncomment after DR is ready
 module "cloudfront" {
   source = "../../modules/cloudfront"
 
@@ -226,14 +198,11 @@ module "cloudfront" {
   primary_alb_dns_name = module.alb.alb_dns_name
   primary_alb_arn      = module.alb.alb_arn
   dr_alb_dns_name      = local.dr_alb_dns_name
-
-  #dr_alb_dns_name      = try(data.aws_ssm_parameter.dr_alb_dns.value, "placeholder.elb.eu-west-1.amazonaws.com")
-  primary_region = var.aws_region
-  dr_region      = "eu-west-1"
+  primary_region       = var.aws_region
+  dr_region            = "eu-west-1"
 }
 
 # Create Lambda for automatic failover orchestration
-# This should also be deployed after DR is ready
 module "lambda_failover" {
   source = "../../modules/lambda-failover"
 
@@ -340,5 +309,3 @@ resource "aws_cloudwatch_dashboard" "ecs_dashboard" {
     ]
   })
 }
-
-

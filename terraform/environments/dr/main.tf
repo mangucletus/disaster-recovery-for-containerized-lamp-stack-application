@@ -42,12 +42,21 @@ provider "aws" {
 # Get current AWS account ID
 data "aws_caller_identity" "current" {}
 
-# Check if production resources exist (for first deployment)
+# ✅ FIX 3: Enhanced data source for production database cluster ARN
 data "aws_ssm_parameter" "database_cluster_arn" {
   provider = aws.primary
   name     = "/${var.project_name}/production/database-cluster-arn"
 
-  # This makes the data source optional - won't fail if doesn't exist
+  # Only fetch if we're NOT skipping read replica
+  count = var.skip_read_replica ? 0 : 1
+}
+
+# ✅ FIX 3: Add validation to ensure production ALB DNS exists (confirms production is deployed)
+data "aws_ssm_parameter" "production_alb_dns" {
+  provider = aws.primary
+  name     = "/${var.project_name}/production/alb-dns-name"
+  
+  # This validates that production resources exist
   count = var.skip_read_replica ? 0 : 1
 }
 
@@ -76,17 +85,16 @@ module "security" {
   allow_replication_cidrs = ["10.2.0.0/16"] # Allow replication from production VPC
 }
 
-# Create ECR repository in DR region - FIXED
+# Create ECR repository in DR region
 module "ecr" {
   source = "../../modules/ecr"
 
   project_name                    = var.project_name
   environment                     = var.environment
   enable_cross_region_replication = false
-
 }
 
-# Create RDS Aurora - either read replica or standalone
+# ✅ FIX 3: Create RDS Aurora - Fixed read replica logic with proper validation
 module "database" {
   source = "../../modules/database"
 
@@ -98,8 +106,16 @@ module "database" {
   master_username    = var.database_username
   master_password    = var.database_password
   instance_class     = "db.t3.large" # Smaller instance for DR
+  
+  # Fixed read replica configuration with proper validation
   is_read_replica    = var.skip_read_replica ? false : true
   source_cluster_arn = var.skip_read_replica ? "" : data.aws_ssm_parameter.database_cluster_arn[0].value
+  
+  # Ensure this depends on the validation data sources
+  depends_on = [
+    data.aws_ssm_parameter.database_cluster_arn,
+    data.aws_ssm_parameter.production_alb_dns
+  ]
 }
 
 # Create S3 buckets (destination for replication)
@@ -123,27 +139,26 @@ module "alb" {
   certificate_arn       = var.acm_certificate_arn
 }
 
-# Create ECS cluster and service (with 0 desired count for pilot light)
+# ✅ FIX 2: Create ECS cluster and service (with 0 desired count for pilot light) - Already Correct
 module "ecs" {
   source = "../../modules/ecs"
 
   project_name          = var.project_name
   environment           = var.environment
   aws_region            = var.aws_region
-  ecr_repository_url    = module.ecr.repository_url           # ✅ Use DR region ECR
+  ecr_repository_url    = module.ecr.repository_url           # Use DR region ECR
   private_subnet_ids    = module.networking.public_subnet_ids # Use public subnets since no NAT
   ecs_security_group_id = module.security.ecs_security_group_id
   target_group_arn      = module.alb.target_group_arn
   database_endpoint     = module.database.cluster_endpoint
   database_name         = var.database_name
   db_secret_arn         = module.database.db_secret_arn
-  desired_count         = 0 # Start with 0 for pilot light
+  desired_count         = 0 # ✅ Start with 0 for pilot light (Fix 2 already correct)
   min_capacity          = 0
   max_capacity          = 10
   task_cpu              = "256"
   task_memory           = "512"
   assign_public_ip      = true # Need public IP since no NAT gateway
-
 }
 
 # Store DR endpoints for failover script and CloudFront
@@ -183,6 +198,15 @@ resource "aws_ssm_parameter" "failover_in_progress" {
   name  = "/${var.project_name}/failover/in-progress"
   type  = "String"
   value = "false"
+}
+
+# ✅ FIX 3: Add read replica validation parameter
+resource "aws_ssm_parameter" "read_replica_status" {
+  name  = "/${var.project_name}/dr/read-replica-configured"
+  type  = "String"
+  value = var.skip_read_replica ? "false" : "true"
+  
+  description = "Indicates whether DR database is configured as read replica"
 }
 
 # CloudWatch Dashboard for DR monitoring

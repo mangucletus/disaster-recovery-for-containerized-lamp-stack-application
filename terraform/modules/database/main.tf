@@ -76,7 +76,7 @@ resource "aws_rds_cluster_instance" "main" {
   }
 }
 
-# Cross-Region Read Replica (for DR)
+# ✅ FIX 3: Enhanced Cross-Region Read Replica (for DR)
 resource "aws_rds_cluster" "read_replica" {
   count = var.is_read_replica ? 1 : 0
 
@@ -91,21 +91,36 @@ resource "aws_rds_cluster" "read_replica" {
   # Read replica specific settings
   backup_retention_period = 1 # Minimal for cost savings
   skip_final_snapshot     = true
+  
+  # Enable encryption (inherited from source)
+  storage_encrypted = true
 
   tags = {
-    Name        = "${var.project_name}-aurora-cluster-replica"
-    Environment = var.environment
-    Type        = "ReadReplica"
+    Name          = "${var.project_name}-aurora-cluster-replica"
+    Environment   = var.environment
+    Type          = "ReadReplica"
+    SourceCluster = var.source_cluster_arn
   }
 
   lifecycle {
     ignore_changes = [
-      engine_version  # Ignore minor version updates
+      engine_version,                   # Ignore minor version updates
+      replication_source_identifier    # Don't recreate if source changes
     ]
+    
+    # Prevent accidental deletion of read replica
+    prevent_destroy = true
+  }
+  
+  # Add timeouts for large clusters
+  timeouts {
+    create = "2h"
+    update = "2h"
+    delete = "2h"
   }
 }
 
-# Read Replica Instance
+# ✅ FIX 3: Enhanced Read Replica Instance with better error handling
 resource "aws_rds_cluster_instance" "read_replica" {
   count = var.is_read_replica ? 1 : 0
 
@@ -113,11 +128,25 @@ resource "aws_rds_cluster_instance" "read_replica" {
   cluster_identifier = aws_rds_cluster.read_replica[0].id
   instance_class     = var.instance_class
   engine             = "aurora-mysql"
+  
+  # Enhanced monitoring for read replica
+  performance_insights_enabled = true
+  monitoring_interval         = 60
 
   tags = {
     Name        = "${var.project_name}-aurora-replica-instance-1"
     Environment = var.environment
     Type        = "ReadReplica"
+  }
+  
+  # Add dependency to ensure cluster is ready
+  depends_on = [aws_rds_cluster.read_replica]
+  
+  # Add timeouts for replica instance creation
+  timeouts {
+    create = "2h"
+    update = "2h"
+    delete = "2h"
   }
 }
 
