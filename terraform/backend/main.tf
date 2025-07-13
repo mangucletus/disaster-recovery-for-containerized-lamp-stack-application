@@ -16,7 +16,7 @@ provider "aws" {
   region = "eu-central-1"
 }
 
-# S3 bucket for storing Terraform state files
+# S3 bucket for storing Terraform state files (best practice)
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "student-record-system-v2-terraform-state-${data.aws_caller_identity.current.account_id}"
 
