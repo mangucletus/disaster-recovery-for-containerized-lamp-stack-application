@@ -87,7 +87,7 @@ module "database" {
   database_name           = var.database_name
   master_username         = var.database_username
   master_password         = var.database_password
-  instance_class          = "db.t4g.medium"
+  instance_class          = "db.t3.large"
   instance_count          = 2 # 2 instances for HA
   backup_retention_period = 7
   is_read_replica         = false
