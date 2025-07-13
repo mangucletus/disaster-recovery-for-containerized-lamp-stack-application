@@ -98,11 +98,11 @@ variable "acm_certificate_arn" {
 variable "deploy_cloudfront" {
   description = "Deploy CloudFront and Lambda failover (set to false on first deployment)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "enable_s3_replication" {
   description = "Enable S3 cross-region replication (set to false on first deployment)"
   type        = bool
-  default     = false
+  default     = true
 }
