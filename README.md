@@ -70,57 +70,57 @@ This project demonstrates a enterprise-grade containerized LAMP stack applicatio
 ```mermaid
 graph TB
     subgraph "Global Access Layer"
-        Users[End Users<br/>Global Distribution]
-        CF[CloudFront Distribution<br/>Global CDN<br/>d15jb99tjkxquc.cloudfront.net]
-        R53[Route 53 DNS<br/>Health-based Routing<br/>Automatic Failover]
+        Users[End Users Global Distribution]
+        CF[CloudFront Distribution Global CDN d15jb99tjkxquc.cloudfront.net]
+        R53[Route 53 DNS Health-based Routing Automatic Failover]
     end
     
     subgraph "Primary Region: eu-central-1"
         subgraph "Production VPC: 10.2.0.0/16"
             subgraph "Public Tier"
-                ALB_P[Application Load Balancer<br/>student-record-system-alb<br/>Port 80/443]
-                NAT1_P[NAT Gateway AZ-1<br/>Outbound Internet]
-                NAT2_P[NAT Gateway AZ-2<br/>High Availability]
+                ALB_P[Application Load Balancer student-record-system-alb Port 80/443]
+                NAT1_P[NAT Gateway AZ-1 Outbound Internet]
+                NAT2_P[NAT Gateway AZ-2 High Availability]
             end
             
             subgraph "Application Tier"
-                ECS_P[ECS Fargate Cluster<br/>2 Running Tasks<br/>Auto-scaling: 2-10 tasks]
-                TG_P[Target Group<br/>Health Checks<br/>HTTP Path: /]
+                ECS_P[ECS Fargate Cluster 2 Running Tasks Auto-scaling 2-10 tasks]
+                TG_P[Target Group Health Checks HTTP Path /]
             end
             
             subgraph "Data Tier"
-                RDS_P[(Aurora MySQL 8.0<br/>Multi-AZ Cluster<br/>2x db.t3.large instances)]
-                S3_P[S3 Buckets<br/>Application Assets<br/>Cross-region Replication]
+                RDS_P[(Aurora MySQL 8.0 Multi-AZ Cluster 2x db.t3.large instances)]
+                S3_P[S3 Buckets Application Assets Cross-region Replication]
             end
         end
         
-        ECR_P[Elastic Container Registry<br/>Container Images<br/>Multi-region Push]
-        CW_P[CloudWatch<br/>Metrics & Logs<br/>Alarms & Dashboards]
+        ECR_P[Elastic Container Registry Container Images Multi-region Push]
+        CW_P[CloudWatch Metrics and Logs Alarms and Dashboards]
     end
     
     subgraph "DR Region: eu-west-1"
         subgraph "DR VPC: 10.3.0.0/16"
             subgraph "Standby Tier"
-                ALB_DR[Application Load Balancer<br/>Pre-configured<br/>Ready for Traffic]
+                ALB_DR[Application Load Balancer Pre-configured Ready for Traffic]
             end
             
             subgraph "Pilot Light"
-                ECS_DR[ECS Fargate Service<br/>0 Tasks (Standby)<br/>Rapid Scale-up Ready]
+                ECS_DR[ECS Fargate Service 0 Tasks Standby Rapid Scale-up Ready]
             end
             
             subgraph "Data Replication"
-                RDS_DR[(Aurora Read Replica<br/>Real-time Sync<br/>1x db.t3.large instance)]
-                S3_DR[S3 Buckets<br/>Replication Target<br/>Immediate Consistency]
+                RDS_DR[(Aurora Read Replica Real-time Sync 1x db.t3.large instance)]
+                S3_DR[S3 Buckets Replication Target Immediate Consistency]
             end
         end
         
-        CW_DR[CloudWatch<br/>DR Monitoring<br/>Replication Metrics]
+        CW_DR[CloudWatch DR Monitoring Replication Metrics]
     end
     
-    subgraph "Automation & Control"
-        GHA[GitHub Actions<br/>CI/CD Pipeline<br/>Automated Deployments]
-        Lambda[Lambda Functions<br/>Failover Orchestration<br/>Health Monitoring]
-        SSM[Systems Manager<br/>Parameter Store<br/>Configuration Management]
+    subgraph "Automation Control"
+        GHA[GitHub Actions CI/CD Pipeline Automated Deployments]
+        Lambda[Lambda Functions Failover Orchestration Health Monitoring]
+        SSM[Systems Manager Parameter Store Configuration Management]
     end
     
     Users --> CF
@@ -137,9 +137,9 @@ graph TB
     ALB_DR -.-> ECS_DR
     ECS_DR -.-> RDS_DR
     
-    RDS_P ==>|Continuous<br/>Replication| RDS_DR
-    S3_P ==>|Cross-Region<br/>Replication| S3_DR
-    ECR_P ==>|Image<br/>Replication| ECS_DR
+    RDS_P ==>|Continuous Replication| RDS_DR
+    S3_P ==>|Cross-Region Replication| S3_DR
+    ECR_P ==>|Image Replication| ECS_DR
     
     GHA --> ECS_P
     GHA --> ECS_DR
@@ -167,44 +167,44 @@ graph TB
     subgraph "Production Network: eu-central-1"
         subgraph "VPC: 10.2.0.0/16"
             subgraph "Availability Zone 1a"
-                PubSub1[Public Subnet<br/>10.2.1.0/24<br/>ALB + NAT Gateway]
-                PrivSub1[Private Subnet<br/>10.2.10.0/24<br/>ECS Tasks + RDS]
+                PubSub1[Public Subnet 10.2.1.0/24 ALB and NAT Gateway]
+                PrivSub1[Private Subnet 10.2.10.0/24 ECS Tasks and RDS]
             end
             
             subgraph "Availability Zone 1b"
-                PubSub2[Public Subnet<br/>10.2.2.0/24<br/>ALB + NAT Gateway]
-                PrivSub2[Private Subnet<br/>10.2.20.0/24<br/>ECS Tasks + RDS]
+                PubSub2[Public Subnet 10.2.2.0/24 ALB and NAT Gateway]
+                PrivSub2[Private Subnet 10.2.20.0/24 ECS Tasks and RDS]
             end
             
-            IGW_P[Internet Gateway<br/>Primary Region<br/>All Internet Traffic]
-            RT_Pub[Public Route Table<br/>0.0.0.0/0 → IGW<br/>Local Routes]
-            RT_Priv1[Private Route Table 1<br/>0.0.0.0/0 → NAT-1<br/>Database Routes]
-            RT_Priv2[Private Route Table 2<br/>0.0.0.0/0 → NAT-2<br/>High Availability]
+            IGW_P[Internet Gateway Primary Region All Internet Traffic]
+            RT_Pub[Public Route Table 0.0.0.0/0 to IGW Local Routes]
+            RT_Priv1[Private Route Table 1 0.0.0.0/0 to NAT-1 Database Routes]
+            RT_Priv2[Private Route Table 2 0.0.0.0/0 to NAT-2 High Availability]
         end
     end
     
     subgraph "DR Network: eu-west-1"
         subgraph "VPC: 10.3.0.0/16"
             subgraph "Availability Zone 1a"
-                PubSubDR1[Public Subnet<br/>10.3.1.0/24<br/>ALB Only (Pilot Light)]
-                PrivSubDR1[Private Subnet<br/>10.3.10.0/24<br/>ECS + RDS Replica]
+                PubSubDR1[Public Subnet 10.3.1.0/24 ALB Only Pilot Light]
+                PrivSubDR1[Private Subnet 10.3.10.0/24 ECS and RDS Replica]
             end
             
             subgraph "Availability Zone 1b"
-                PubSubDR2[Public Subnet<br/>10.3.2.0/24<br/>ALB Only (Pilot Light)]
-                PrivSubDR2[Private Subnet<br/>10.3.20.0/24<br/>ECS + RDS Replica]
+                PubSubDR2[Public Subnet 10.3.2.0/24 ALB Only Pilot Light]
+                PrivSubDR2[Private Subnet 10.3.20.0/24 ECS and RDS Replica]
             end
             
-            IGW_DR[Internet Gateway<br/>DR Region<br/>Failover Traffic]
-            RT_PubDR[Public Route Table<br/>0.0.0.0/0 → IGW<br/>Emergency Access]
-            RT_PrivDR[Private Route Tables<br/>Direct Internet via IGW<br/>Cost-Optimized (No NAT)]
+            IGW_DR[Internet Gateway DR Region Failover Traffic]
+            RT_PubDR[Public Route Table 0.0.0.0/0 to IGW Emergency Access]
+            RT_PrivDR[Private Route Tables Direct Internet via IGW Cost-Optimized No NAT]
         end
     end
     
     subgraph "Security Groups"
-        SG_ALB[ALB Security Group<br/>Inbound: 80, 443 from 0.0.0.0/0<br/>Outbound: All to ECS SG]
-        SG_ECS[ECS Security Group<br/>Inbound: 80 from ALB SG<br/>Outbound: 3306 to RDS SG]
-        SG_RDS[RDS Security Group<br/>Inbound: 3306 from ECS SG<br/>Cross-region Replication]
+        SG_ALB[ALB Security Group Inbound 80 443 from 0.0.0.0/0 Outbound All to ECS SG]
+        SG_ECS[ECS Security Group Inbound 80 from ALB SG Outbound 3306 to RDS SG]
+        SG_RDS[RDS Security Group Inbound 3306 from ECS SG Cross-region Replication]
     end
     
     IGW_P --> PubSub1
@@ -217,7 +217,7 @@ graph TB
     PubSubDR1 -.-> PrivSubDR1
     PubSubDR2 -.-> PrivSubDR2
     
-    PrivSub1 <-.->|VPC Peering<br/>Replication| PrivSubDR1
+    PrivSub1 <-.->|VPC Peering Replication| PrivSubDR1
     
     style IGW_P fill:#8c4fff,color:#ffffff,stroke:#7a42e6,stroke-width:4px
     style IGW_DR fill:#8c4fff,color:#ffffff,stroke:#7a42e6,stroke-width:2px,stroke-dasharray: 8 8
@@ -240,31 +240,31 @@ graph TB
 graph LR
     subgraph "Normal Operations State"
         direction TB
-        ProdActive[Production Region<br/>eu-central-1<br/>Full Capacity<br/>2 ECS Tasks<br/>100% Traffic]
-        DRStandby[DR Region<br/>eu-west-1<br/>Pilot Light Mode<br/>0 ECS Tasks<br/>0% Traffic]
-        DataFlow[Continuous Replication<br/>RDS: < 1 second lag<br/>S3: Real-time sync<br/>ECR: On-demand]
+        ProdActive[Production Region eu-central-1 Full Capacity 2 ECS Tasks 100 Percent Traffic]
+        DRStandby[DR Region eu-west-1 Pilot Light Mode 0 ECS Tasks 0 Percent Traffic]
+        DataFlow[Continuous Replication RDS less than 1 second lag S3 Real-time sync ECR On-demand]
     end
     
     subgraph "Disaster Detection"
         direction TB
-        HealthCheck[Route 53 Health Checks<br/>30-second intervals<br/>HTTP 200 validation<br/>3 consecutive failures]
-        CloudWatch[CloudWatch Alarms<br/>5xx error rate > 10/min<br/>Target health < 1<br/>ECS service unavailable]
-        Manual[Manual Trigger<br/>GitHub Actions workflow<br/>Emergency activation<br/>Operator decision]
+        HealthCheck[Route 53 Health Checks 30-second intervals HTTP 200 validation 3 consecutive failures]
+        CloudWatch[CloudWatch Alarms 5xx error rate greater than 10/min Target health less than 1 ECS service unavailable]
+        Manual[Manual Trigger GitHub Actions workflow Emergency activation Operator decision]
     end
     
     subgraph "Failover Execution"
         direction TB
-        Lambda[Lambda Orchestrator<br/>Automated coordination<br/>Step-by-step execution<br/>Real-time monitoring]
-        ECSScale[Scale ECS Service<br/>0 → 2 tasks<br/>5-8 minute startup<br/>Health validation]
-        RDSPromote[Promote Read Replica<br/>Read-only → Read-write<br/>2-5 minute promotion<br/>Connection updates]
-        DNSUpdate[Update DNS Records<br/>Route 53 failover<br/>TTL-based propagation<br/>Global distribution]
+        Lambda[Lambda Orchestrator Automated coordination Step-by-step execution Real-time monitoring]
+        ECSScale[Scale ECS Service 0 to 2 tasks 5-8 minute startup Health validation]
+        RDSPromote[Promote Read Replica Read-only to Read-write 2-5 minute promotion Connection updates]
+        DNSUpdate[Update DNS Records Route 53 failover TTL-based propagation Global distribution]
     end
     
     subgraph "Post-Failover State"
         direction TB
-        DRActive[DR Region Active<br/>eu-west-1<br/>Full Capacity<br/>2 ECS Tasks<br/>100% Traffic]
-        ProdDown[Production Region<br/>eu-central-1<br/>Unavailable<br/>Recovery in Progress<br/>0% Traffic]
-        Monitoring[Enhanced Monitoring<br/>Performance validation<br/>Error rate tracking<br/>Capacity optimization]
+        DRActive[DR Region Active eu-west-1 Full Capacity 2 ECS Tasks 100 Percent Traffic]
+        ProdDown[Production Region eu-central-1 Unavailable Recovery in Progress 0 Percent Traffic]
+        Monitoring[Enhanced Monitoring Performance validation Error rate tracking Capacity optimization]
     end
     
     ProdActive --> DataFlow
@@ -330,27 +330,27 @@ gantt
 
 | Layer | Technology | Version | Configuration | Purpose |
 |-------|------------|---------|---------------|---------|
-| **Content Delivery** | Amazon CloudFront | Latest | Global edge locations<br/>SSL/TLS termination | Global content delivery and failover routing |
-| **DNS Management** | Amazon Route 53 | Latest | Health checks enabled<br/>Failover routing policy | DNS resolution and automatic failover |
-| **Load Balancing** | Application Load Balancer | Latest | HTTP/HTTPS listeners<br/>Health checks configured | Traffic distribution and health monitoring |
-| **Container Orchestration** | Amazon ECS Fargate | Latest | CPU: 256 units<br/>Memory: 512 MB | Serverless container management |
-| **Container Registry** | Amazon ECR | Latest | Lifecycle policies<br/>Cross-region replication | Container image storage and distribution |
-| **Database** | Amazon Aurora MySQL | 8.0 | Multi-AZ deployment<br/>Cross-region read replica | Primary data storage with DR capability |
-| **Object Storage** | Amazon S3 | Latest | Cross-region replication<br/>Versioning enabled | Static assets and backup storage |
-| **Infrastructure as Code** | Terraform | >= 1.0 | Modular architecture<br/>Remote state backend | Infrastructure provisioning and management |
-| **CI/CD Pipeline** | GitHub Actions | Latest | Multi-environment workflows<br/>Automated deployments | Continuous integration and deployment |
-| **Monitoring** | Amazon CloudWatch | Latest | Custom dashboards<br/>Automated alarms | System monitoring and alerting |
-| **Configuration Management** | AWS Systems Manager | Latest | Parameter Store<br/>Secrets management | Configuration and secret storage |
+| **Content Delivery** | Amazon CloudFront | Latest | Global edge locations SSL/TLS termination | Global content delivery and failover routing |
+| **DNS Management** | Amazon Route 53 | Latest | Health checks enabled Failover routing policy | DNS resolution and automatic failover |
+| **Load Balancing** | Application Load Balancer | Latest | HTTP/HTTPS listeners Health checks configured | Traffic distribution and health monitoring |
+| **Container Orchestration** | Amazon ECS Fargate | Latest | CPU: 256 units Memory: 512 MB | Serverless container management |
+| **Container Registry** | Amazon ECR | Latest | Lifecycle policies Cross-region replication | Container image storage and distribution |
+| **Database** | Amazon Aurora MySQL | 8.0 | Multi-AZ deployment Cross-region read replica | Primary data storage with DR capability |
+| **Object Storage** | Amazon S3 | Latest | Cross-region replication Versioning enabled | Static assets and backup storage |
+| **Infrastructure as Code** | Terraform | >= 1.0 | Modular architecture Remote state backend | Infrastructure provisioning and management |
+| **CI/CD Pipeline** | GitHub Actions | Latest | Multi-environment workflows Automated deployments | Continuous integration and deployment |
+| **Monitoring** | Amazon CloudWatch | Latest | Custom dashboards Automated alarms | System monitoring and alerting |
+| **Configuration Management** | AWS Systems Manager | Latest | Parameter Store Secrets management | Configuration and secret storage |
 
 ### Application Stack
 
 | Component | Technology | Version | Configuration |
 |-----------|------------|---------|---------------|
-| **Web Server** | Apache HTTP Server | 2.4 | Virtual hosts configured<br/>SSL/TLS support |
-| **Runtime** | PHP | 8.1 | FPM enabled<br/>Extensions: PDO, MySQL |
-| **Frontend Framework** | Bootstrap | 5.1.3 | Responsive design<br/>Component library |
-| **Database Driver** | PDO MySQL | 8.1 | Connection pooling<br/>Prepared statements |
-| **Containerization** | Docker | Latest | Multi-stage builds<br/>Security scanning |
+| **Web Server** | Apache HTTP Server | 2.4 | Virtual hosts configured SSL/TLS support |
+| **Runtime** | PHP | 8.1 | FPM enabled Extensions: PDO, MySQL |
+| **Frontend Framework** | Bootstrap | 5.1.3 | Responsive design Component library |
+| **Database Driver** | PDO MySQL | 8.1 | Connection pooling Prepared statements |
+| **Containerization** | Docker | Latest | Multi-stage builds Security scanning |
 
 ---
 
@@ -361,26 +361,26 @@ gantt
 ```mermaid
 graph TB
     subgraph "Root Configurations"
-        ProdEnv[Production Environment<br/>terraform/environments/production<br/>eu-central-1 deployment]
-        DREnv[DR Environment<br/>terraform/environments/dr<br/>eu-west-1 deployment]
-        Backend[Backend Configuration<br/>terraform/backend<br/>S3 state management]
+        ProdEnv[Production Environment terraform/environments/production eu-central-1 deployment]
+        DREnv[DR Environment terraform/environments/dr eu-west-1 deployment]
+        Backend[Backend Configuration terraform/backend S3 state management]
     end
     
     subgraph "Reusable Modules"
-        NetMod[Networking Module<br/>VPC, Subnets, Routing<br/>Security Groups, NACLs]
-        SecMod[Security Module<br/>IAM Roles, Policies<br/>KMS, Secrets Manager]
-        DbMod[Database Module<br/>Aurora Clusters<br/>Read Replicas, Backups]
-        ComputeMod[Compute Module<br/>ECS Clusters, Services<br/>Task Definitions, ALB]
-        StorageMod[Storage Module<br/>S3 Buckets, ECR<br/>Cross-region Replication]
-        MonMod[Monitoring Module<br/>CloudWatch, Alarms<br/>SNS, Dashboards]
-        CDNMod[CDN Module<br/>CloudFront Distribution<br/>Route 53 Configuration]
-        AutoMod[Automation Module<br/>Lambda Functions<br/>EventBridge Rules]
+        NetMod[Networking Module VPC Subnets Routing Security Groups NACLs]
+        SecMod[Security Module IAM Roles Policies KMS Secrets Manager]
+        DbMod[Database Module Aurora Clusters Read Replicas Backups]
+        ComputeMod[Compute Module ECS Clusters Services Task Definitions ALB]
+        StorageMod[Storage Module S3 Buckets ECR Cross-region Replication]
+        MonMod[Monitoring Module CloudWatch Alarms SNS Dashboards]
+        CDNMod[CDN Module CloudFront Distribution Route 53 Configuration]
+        AutoMod[Automation Module Lambda Functions EventBridge Rules]
     end
     
     subgraph "State Management"
-        S3State[S3 Backend<br/>Encrypted state storage<br/>Cross-region replication]
-        DynamoLock[DynamoDB Lock Table<br/>State locking<br/>Concurrent protection]
-        Versioning[State Versioning<br/>History tracking<br/>Rollback capability]
+        S3State[S3 Backend Encrypted state storage Cross-region replication]
+        DynamoLock[DynamoDB Lock Table State locking Concurrent protection]
+        Versioning[State Versioning History tracking Rollback capability]
     end
     
     ProdEnv --> NetMod
@@ -421,49 +421,49 @@ graph TB
 ```mermaid
 graph TD
     subgraph "Infrastructure Provisioning Flow"
-        Start[Terraform Initialize<br/>Backend Configuration<br/>Provider Setup]
+        Start[Terraform Initialize Backend Configuration Provider Setup]
         
         subgraph "Foundation Layer"
-            VPC[VPC Creation<br/>CIDR: 10.2.0.0/16 (Prod)<br/>CIDR: 10.3.0.0/16 (DR)]
-            Subnets[Subnet Creation<br/>Public: ALB, NAT<br/>Private: ECS, RDS]
-            Security[Security Groups<br/>Ingress/Egress Rules<br/>Least Privilege Access]
+            VPC[VPC Creation CIDR 10.2.0.0/16 Production CIDR 10.3.0.0/16 DR]
+            Subnets[Subnet Creation Public ALB NAT Private ECS RDS]
+            Security[Security Groups Ingress/Egress Rules Least Privilege Access]
         end
         
         subgraph "Data Layer"
-            ParamStore[Parameter Store<br/>Configuration Values<br/>Database Credentials]
-            KMS[KMS Key Creation<br/>Encryption at Rest<br/>Cross-service Access]
-            S3Buckets[S3 Bucket Creation<br/>Versioning Enabled<br/>CRR Configuration]
+            ParamStore[Parameter Store Configuration Values Database Credentials]
+            KMS[KMS Key Creation Encryption at Rest Cross-service Access]
+            S3Buckets[S3 Bucket Creation Versioning Enabled CRR Configuration]
         end
         
         subgraph "Database Layer"
-            RDSSubnet[DB Subnet Groups<br/>Multi-AZ Placement<br/>Cross-region Setup]
-            RDSCluster[Aurora Cluster<br/>Primary + Read Replica<br/>Automated Backups]
-            Secrets[Secrets Manager<br/>Database Passwords<br/>Automatic Rotation]
+            RDSSubnet[DB Subnet Groups Multi-AZ Placement Cross-region Setup]
+            RDSCluster[Aurora Cluster Primary and Read Replica Automated Backups]
+            Secrets[Secrets Manager Database Passwords Automatic Rotation]
         end
         
         subgraph "Compute Layer"
-            ECR[ECR Repository<br/>Image Storage<br/>Multi-region Push]
-            ECSCluster[ECS Cluster<br/>Fargate Launch Type<br/>Container Insights]
-            ALBTarget[ALB Target Groups<br/>Health Check Config<br/>Routing Rules]
-            ALBListener[ALB Listeners<br/>HTTP/HTTPS Rules<br/>SSL Termination]
+            ECR[ECR Repository Image Storage Multi-region Push]
+            ECSCluster[ECS Cluster Fargate Launch Type Container Insights]
+            ALBTarget[ALB Target Groups Health Check Config Routing Rules]
+            ALBListener[ALB Listeners HTTP/HTTPS Rules SSL Termination]
         end
         
         subgraph "Application Layer"
-            TaskDef[ECS Task Definition<br/>Container Specification<br/>Resource Allocation]
-            ECSService[ECS Service<br/>Desired Count<br/>Auto-scaling Config]
-            ServiceMesh[Service Discovery<br/>Load Balancing<br/>Health Monitoring]
+            TaskDef[ECS Task Definition Container Specification Resource Allocation]
+            ECSService[ECS Service Desired Count Auto-scaling Config]
+            ServiceMesh[Service Discovery Load Balancing Health Monitoring]
         end
         
         subgraph "Monitoring Layer"
-            CWLogs[CloudWatch Logs<br/>Centralized Logging<br/>Retention Policies]
-            CWMetrics[CloudWatch Metrics<br/>Custom Metrics<br/>Alarm Configuration]
-            Dashboard[CloudWatch Dashboard<br/>Visual Monitoring<br/>Real-time Status]
+            CWLogs[CloudWatch Logs Centralized Logging Retention Policies]
+            CWMetrics[CloudWatch Metrics Custom Metrics Alarm Configuration]
+            Dashboard[CloudWatch Dashboard Visual Monitoring Real-time Status]
         end
         
         subgraph "Global Layer"
-            Route53[Route 53 Configuration<br/>Health Checks<br/>Failover Routing]
-            CloudFront[CloudFront Distribution<br/>Global Edge Locations<br/>SSL/TLS Termination]
-            Lambda[Lambda Functions<br/>Automation Logic<br/>Event Processing]
+            Route53[Route 53 Configuration Health Checks Failover Routing]
+            CloudFront[CloudFront Distribution Global Edge Locations SSL/TLS Termination]
+            Lambda[Lambda Functions Automation Logic Event Processing]
         end
     end
     
@@ -512,44 +512,44 @@ graph TD
 ```mermaid
 graph TB
     subgraph "Source Control"
-        Dev[Developer<br/>Code Changes<br/>Feature Branch]
-        PR[Pull Request<br/>Code Review<br/>Automated Testing]
-        Main[Main Branch<br/>Production Ready<br/>Merge Trigger]
+        Dev[Developer Code Changes Feature Branch]
+        PR[Pull Request Code Review Automated Testing]
+        Main[Main Branch Production Ready Merge Trigger]
     end
     
     subgraph "GitHub Actions Workflow"
-        Trigger[Workflow Trigger<br/>Push to Main<br/>Manual Dispatch]
+        Trigger[Workflow Trigger Push to Main Manual Dispatch]
         
         subgraph "Build Stage"
-            Checkout[Code Checkout<br/>Repository Clone<br/>Dependency Resolution]
-            DockerBuild[Docker Build<br/>Multi-stage Build<br/>Security Scanning]
-            ImagePush[Image Push<br/>ECR Primary Region<br/>ECR DR Region]
+            Checkout[Code Checkout Repository Clone Dependency Resolution]
+            DockerBuild[Docker Build Multi-stage Build Security Scanning]
+            ImagePush[Image Push ECR Primary Region ECR DR Region]
         end
         
         subgraph "Infrastructure Stage"
-            TFInit[Terraform Init<br/>Backend Configuration<br/>Provider Setup]
-            TFPlan[Terraform Plan<br/>Change Validation<br/>Resource Preview]
-            TFApply[Terraform Apply<br/>Infrastructure Deployment<br/>State Management]
+            TFInit[Terraform Init Backend Configuration Provider Setup]
+            TFPlan[Terraform Plan Change Validation Resource Preview]
+            TFApply[Terraform Apply Infrastructure Deployment State Management]
         end
         
         subgraph "Application Stage"
-            ECSUpdate[ECS Service Update<br/>New Task Definition<br/>Rolling Deployment]
-            HealthCheck[Health Validation<br/>ALB Target Health<br/>Application Response]
-            Verification[Deployment Verification<br/>Smoke Tests<br/>Metric Validation]
+            ECSUpdate[ECS Service Update New Task Definition Rolling Deployment]
+            HealthCheck[Health Validation ALB Target Health Application Response]
+            Verification[Deployment Verification Smoke Tests Metric Validation]
         end
         
         subgraph "DR Stage"
-            DRValidation[DR Environment Check<br/>Replication Status<br/>Standby Readiness]
-            DRUpdate[DR Configuration Update<br/>Latest Image Reference<br/>Zero-downtime Prep]
-            DRTesting[DR Testing<br/>Failover Capability<br/>Recovery Validation]
+            DRValidation[DR Environment Check Replication Status Standby Readiness]
+            DRUpdate[DR Configuration Update Latest Image Reference Zero-downtime Prep]
+            DRTesting[DR Testing Failover Capability Recovery Validation]
         end
     end
     
     subgraph "Deployment Targets"
-        ProdECS[Production ECS<br/>eu-central-1<br/>2 Running Tasks]
-        DREcs[DR ECS<br/>eu-west-1<br/>0 Tasks (Standby)]
-        ProdRDS[Production RDS<br/>Aurora Primary<br/>Multi-AZ Active]
-        DRRDS[DR RDS<br/>Read Replica<br/>Continuous Sync]
+        ProdECS[Production ECS eu-central-1 2 Running Tasks]
+        DREcs[DR ECS eu-west-1 0 Tasks Standby]
+        ProdRDS[Production RDS Aurora Primary Multi-AZ Active]
+        DRRDS[DR RDS Read Replica Continuous Sync]
     end
     
     Dev --> PR
@@ -591,21 +591,21 @@ graph TB
 graph LR
     subgraph "Configuration Management"
         subgraph "Production Environment"
-            ProdVars[Production Variables<br/>terraform.tfvars<br/>vpc_cidr: 10.2.0.0/16<br/>instance_class: db.t3.large<br/>desired_count: 2]
-            ProdSecrets[Production Secrets<br/>GitHub Secrets<br/>DATABASE_PASSWORD<br/>AWS_ACCESS_KEY_ID<br/>AWS_SECRET_ACCESS_KEY]
-            ProdParams[Parameter Store<br/>/student-record-system-v2/production/<br/>database-cluster-arn<br/>alb-dns-name<br/>target-group-arn]
+            ProdVars[Production Variables terraform.tfvars vpc_cidr 10.2.0.0/16 instance_class db.t3.large desired_count 2]
+            ProdSecrets[Production Secrets GitHub Secrets DATABASE_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY]
+            ProdParams[Parameter Store /student-record-system-v2/production/ database-cluster-arn alb-dns-name target-group-arn]
         end
         
         subgraph "DR Environment"
-            DRVars[DR Variables<br/>terraform.tfvars<br/>vpc_cidr: 10.3.0.0/16<br/>instance_class: db.t3.large<br/>desired_count: 0]
-            DRParams[Parameter Store<br/>/student-record-system-v2/dr/<br/>alb-dns-name<br/>database-endpoint<br/>ecs-cluster-name<br/>read-replica-configured]
-            DRConfig[DR Configuration<br/>skip_read_replica: false<br/>create_nat_gateways: false<br/>assign_public_ip: true]
+            DRVars[DR Variables terraform.tfvars vpc_cidr 10.3.0.0/16 instance_class db.t3.large desired_count 0]
+            DRParams[Parameter Store /student-record-system-v2/dr/ alb-dns-name database-endpoint ecs-cluster-name read-replica-configured]
+            DRConfig[DR Configuration skip_read_replica false create_nat_gateways false assign_public_ip true]
         end
         
         subgraph "Global Configuration"
-            BackendConfig[Backend Configuration<br/>S3 Bucket: terraform-state<br/>DynamoDB: terraform-locks<br/>Encryption: AES256]
-            GlobalTags[Global Tags<br/>Environment: production/dr<br/>Project: student-record-system-v2<br/>ManagedBy: Terraform]
-            CrossRegion[Cross-Region Settings<br/>Replication Rules<br/>Failover Policies<br/>Health Check Configuration]
+            BackendConfig[Backend Configuration S3 Bucket terraform-state DynamoDB terraform-locks Encryption AES256]
+            GlobalTags[Global Tags Environment production/dr Project student-record-system-v2 ManagedBy Terraform]
+            CrossRegion[Cross-Region Settings Replication Rules Failover Policies Health Check Configuration]
         end
     end
     
@@ -634,73 +634,73 @@ graph LR
 ```mermaid
 graph TB
     subgraph "Edge Security Layer"
-        Internet[Internet Traffic<br/>Global Requests<br/>Various Sources]
-        WAF[AWS WAF<br/>Web Application Firewall<br/>OWASP Top 10 Protection]
-        Shield[AWS Shield<br/>DDoS Protection<br/>Automatic Mitigation]
-        CloudFront[CloudFront Security<br/>SSL/TLS Termination<br/>Origin Access Control]
+        Internet[Internet Traffic Global Requests Various Sources]
+        WAF[AWS WAF Web Application Firewall OWASP Top 10 Protection]
+        Shield[AWS Shield DDoS Protection Automatic Mitigation]
+        CloudFront[CloudFront Security SSL/TLS Termination Origin Access Control]
     end
     
     subgraph "Network Security Layer"
         subgraph "VPC Security"
-            VPCFlow[VPC Flow Logs<br/>Network Traffic Analysis<br/>Security Monitoring]
-            NACL[Network ACLs<br/>Subnet-level Filtering<br/>Stateless Rules]
-            RouteTable[Route Tables<br/>Traffic Direction<br/>Isolation Control]
+            VPCFlow[VPC Flow Logs Network Traffic Analysis Security Monitoring]
+            NACL[Network ACLs Subnet-level Filtering Stateless Rules]
+            RouteTable[Route Tables Traffic Direction Isolation Control]
         end
         
         subgraph "Security Groups"
-            ALBSG[ALB Security Group<br/>Inbound: 80, 443 (0.0.0.0/0)<br/>Outbound: All to ECS SG]
-            ECSSG[ECS Security Group<br/>Inbound: 80 (ALB SG only)<br/>Outbound: 3306 to RDS SG]
-            RDSSG[RDS Security Group<br/>Inbound: 3306 (ECS SG only)<br/>Outbound: Restricted]
+            ALBSG[ALB Security Group Inbound 80 443 from 0.0.0.0/0 Outbound All to ECS SG]
+            ECSSG[ECS Security Group Inbound 80 from ALB SG only Outbound 3306 to RDS SG]
+            RDSSG[RDS Security Group Inbound 3306 from ECS SG only Outbound Restricted]
         end
     end
     
     subgraph "Identity and Access Layer"
         subgraph "IAM Framework"
-            ServiceRoles[Service-linked Roles<br/>ECS Task Execution<br/>RDS Enhanced Monitoring]
-            TaskRoles[Task-specific Roles<br/>Application Permissions<br/>Least Privilege Access]
-            CrossAccount[Cross-account Access<br/>DR Region Permissions<br/>Replication Rights]
+            ServiceRoles[Service-linked Roles ECS Task Execution RDS Enhanced Monitoring]
+            TaskRoles[Task-specific Roles Application Permissions Least Privilege Access]
+            CrossAccount[Cross-account Access DR Region Permissions Replication Rights]
         end
         
         subgraph "Secret Management"
-            SecretsManager[AWS Secrets Manager<br/>Database Credentials<br/>Automatic Rotation]
-            ParameterStore[Parameter Store<br/>Configuration Values<br/>Secure String Parameters]
-            KMSKeys[KMS Customer Keys<br/>Encryption Key Management<br/>Cross-service Access]
+            SecretsManager[AWS Secrets Manager Database Credentials Automatic Rotation]
+            ParameterStore[Parameter Store Configuration Values Secure String Parameters]
+            KMSKeys[KMS Customer Keys Encryption Key Management Cross-service Access]
         end
     end
     
     subgraph "Data Protection Layer"
         subgraph "Encryption in Transit"
-            TLSTermination[TLS 1.2+ Enforcement<br/>Certificate Management<br/>Perfect Forward Secrecy]
-            InterService[Inter-service Encryption<br/>VPC Endpoints<br/>Private Communication]
-            DatabaseTLS[Database TLS<br/>Encrypted Connections<br/>Certificate Validation]
+            TLSTermination[TLS 1.2+ Enforcement Certificate Management Perfect Forward Secrecy]
+            InterService[Inter-service Encryption VPC Endpoints Private Communication]
+            DatabaseTLS[Database TLS Encrypted Connections Certificate Validation]
         end
         
         subgraph "Encryption at Rest"
-            RDSEncryption[RDS Encryption<br/>AES-256 Encryption<br/>Encrypted Backups]
-            S3Encryption[S3 Server-side Encryption<br/>KMS-managed Keys<br/>Object-level Encryption]
-            EBSEncryption[EBS Volume Encryption<br/>Fargate Storage<br/>Temporary Files]
+            RDSEncryption[RDS Encryption AES-256 Encryption Encrypted Backups]
+            S3Encryption[S3 Server-side Encryption KMS-managed Keys Object-level Encryption]
+            EBSEncryption[EBS Volume Encryption Fargate Storage Temporary Files]
         end
     end
     
     subgraph "Application Security Layer"
         subgraph "Container Security"
-            ImageScanning[ECR Image Scanning<br/>Vulnerability Assessment<br/>Critical CVE Detection]
-            RuntimeSecurity[Container Runtime Security<br/>Read-only Filesystems<br/>Non-root Execution]
-            SecretsInjection[Secrets Injection<br/>Environment Variables<br/>Secure Configuration]
+            ImageScanning[ECR Image Scanning Vulnerability Assessment Critical CVE Detection]
+            RuntimeSecurity[Container Runtime Security Read-only Filesystems Non-root Execution]
+            SecretsInjection[Secrets Injection Environment Variables Secure Configuration]
         end
         
         subgraph "Application Controls"
-            InputValidation[Input Validation<br/>SQL Injection Prevention<br/>XSS Protection]
-            SessionSecurity[Session Management<br/>Secure Cookies<br/>Session Timeout]
-            DatabaseSecurity[Database Security<br/>Prepared Statements<br/>Connection Pooling]
+            InputValidation[Input Validation SQL Injection Prevention XSS Protection]
+            SessionSecurity[Session Management Secure Cookies Session Timeout]
+            DatabaseSecurity[Database Security Prepared Statements Connection Pooling]
         end
     end
     
     subgraph "Monitoring and Compliance"
-        CloudTrail[AWS CloudTrail<br/>API Call Logging<br/>Compliance Audit]
-        GuardDuty[Amazon GuardDuty<br/>Threat Detection<br/>Behavioral Analysis]
-        SecurityHub[AWS Security Hub<br/>Centralized Findings<br/>Compliance Dashboard]
-        ConfigRules[AWS Config Rules<br/>Resource Compliance<br/>Configuration Drift]
+        CloudTrail[AWS CloudTrail API Call Logging Compliance Audit]
+        GuardDuty[Amazon GuardDuty Threat Detection Behavioral Analysis]
+        SecurityHub[AWS Security Hub Centralized Findings Compliance Dashboard]
+        ConfigRules[AWS Config Rules Resource Compliance Configuration Drift]
     end
     
     Internet --> WAF
@@ -777,39 +777,39 @@ graph TB
 graph TB
     subgraph "CloudWatch Dashboard Layout"
         subgraph "Service Health Monitoring"
-            ServiceStatus[Service Status Panel<br/>ECS Service Health<br/>Running Tasks: 2/2<br/>Service Status: ACTIVE<br/>Last Deployment: SUCCESS]
+            ServiceStatus[Service Status Panel ECS Service Health Running Tasks 2/2 Service Status ACTIVE Last Deployment SUCCESS]
             
-            ALBHealth[ALB Health Panel<br/>Target Health: 2/2 Healthy<br/>Request Count: 1,250/min<br/>Response Time: 95ms (P50)<br/>Error Rate: 0.02%]
+            ALBHealth[ALB Health Panel Target Health 2/2 Healthy Request Count 1250/min Response Time 95ms P50 Error Rate 0.02 percent]
             
-            DatabaseHealth[Database Health Panel<br/>Aurora Cluster: AVAILABLE<br/>Writer: ACTIVE<br/>Reader: ACTIVE<br/>Connections: 25/100]
+            DatabaseHealth[Database Health Panel Aurora Cluster AVAILABLE Writer ACTIVE Reader ACTIVE Connections 25/100]
         end
         
         subgraph "Performance Metrics"
-            CPUMemory[Resource Utilization<br/>ECS CPU: 45% (avg)<br/>ECS Memory: 62% (avg)<br/>RDS CPU: 35% (avg)<br/>RDS Memory: 58% (avg)]
+            CPUMemory[Resource Utilization ECS CPU 45 percent avg ECS Memory 62 percent avg RDS CPU 35 percent avg RDS Memory 58 percent avg]
             
-            ResponseMetrics[Response Performance<br/>P50 Latency: 95ms<br/>P90 Latency: 180ms<br/>P99 Latency: 450ms<br/>Success Rate: 99.98%]
+            ResponseMetrics[Response Performance P50 Latency 95ms P90 Latency 180ms P99 Latency 450ms Success Rate 99.98 percent]
             
-            ThroughputMetrics[Throughput Metrics<br/>Requests/sec: 20.8<br/>Peak RPS: 45.2<br/>Data Transfer: 1.2 GB/hour<br/>Database QPS: 180]
+            ThroughputMetrics[Throughput Metrics Requests/sec 20.8 Peak RPS 45.2 Data Transfer 1.2 GB/hour Database QPS 180]
         end
         
         subgraph "DR Monitoring"
-            ReplicationStatus[Replication Status<br/>RDS Lag: 0.8 seconds<br/>S3 Replication: UP TO DATE<br/>Cross-region Health: OK<br/>Last Sync: 2 seconds ago]
+            ReplicationStatus[Replication Status RDS Lag 0.8 seconds S3 Replication UP TO DATE Cross-region Health OK Last Sync 2 seconds ago]
             
-            DRReadiness[DR Readiness<br/>ECS DR Status: STANDBY (0 tasks)<br/>ALB DR: PROVISIONED<br/>RDS Replica: AVAILABLE<br/>Failover Capability: READY]
+            DRReadiness[DR Readiness ECS DR Status STANDBY 0 tasks ALB DR PROVISIONED RDS Replica AVAILABLE Failover Capability READY]
             
-            FailoverMetrics[Failover Metrics<br/>Last DR Test: 3 days ago<br/>Test Result: SUCCESS<br/>Failover Time: 18 minutes<br/>Data Loss: 0 records]
+            FailoverMetrics[Failover Metrics Last DR Test 3 days ago Test Result SUCCESS Failover Time 18 minutes Data Loss 0 records]
         end
         
         subgraph "Security Monitoring"
-            SecurityEvents[Security Events<br/>Failed Logins: 0/hour<br/>WAF Blocked: 12/hour<br/>Suspicious IPs: 0<br/>SSL Certificate: VALID (89 days)]
+            SecurityEvents[Security Events Failed Logins 0/hour WAF Blocked 12/hour Suspicious IPs 0 SSL Certificate VALID 89 days]
             
-            ComplianceStatus[Compliance Status<br/>Security Group Rules: COMPLIANT<br/>Encryption Status: ALL ENCRYPTED<br/>Backup Status: UP TO DATE<br/>Access Logging: ENABLED]
+            ComplianceStatus[Compliance Status Security Group Rules COMPLIANT Encryption Status ALL ENCRYPTED Backup Status UP TO DATE Access Logging ENABLED]
         end
         
         subgraph "Operational Metrics"
-            ErrorTracking[Error Tracking<br/>Application Errors: 2/hour<br/>Database Errors: 0/hour<br/>Infrastructure Errors: 0/hour<br/>4xx Errors: 15/hour<br/>5xx Errors: 1/hour]
+            ErrorTracking[Error Tracking Application Errors 2/hour Database Errors 0/hour Infrastructure Errors 0/hour 4xx Errors 15/hour 5xx Errors 1/hour]
             
-            BusinessMetrics[Business Metrics<br/>Student Records: 1,247<br/>Daily Active Users: 85<br/>Peak Concurrent Users: 23<br/>Average Session: 8.5 min]
+            BusinessMetrics[Business Metrics Student Records 1247 Daily Active Users 85 Peak Concurrent Users 23 Average Session 8.5 min]
         end
     end
     
@@ -827,30 +827,30 @@ graph TB
 ```mermaid
 graph TD
     subgraph "Alert Severity Levels"
-        P1[Priority 1 - Critical<br/>Service completely down<br/>Data loss occurring<br/>Security breach detected]
-        P2[Priority 2 - High<br/>Service degraded<br/>Performance impacted<br/>DR replication failing]
-        P3[Priority 3 - Medium<br/>Resource thresholds<br/>Capacity warnings<br/>Non-critical errors]
-        P4[Priority 4 - Low<br/>Informational alerts<br/>Maintenance notices<br/>Optimization opportunities]
+        P1[Priority 1 Critical Service completely down Data loss occurring Security breach detected]
+        P2[Priority 2 High Service degraded Performance impacted DR replication failing]
+        P3[Priority 3 Medium Resource thresholds Capacity warnings Non-critical errors]
+        P4[Priority 4 Low Informational alerts Maintenance notices Optimization opportunities]
     end
     
     subgraph "Alert Sources"
-        CloudWatchAlarms[CloudWatch Alarms<br/>Threshold-based<br/>Composite alarms<br/>Anomaly detection]
-        HealthChecks[Route 53 Health Checks<br/>Endpoint monitoring<br/>Latency checks<br/>Failure detection]
-        SecurityAlerts[Security Alerts<br/>GuardDuty findings<br/>Config compliance<br/>Access anomalies]
-        ApplicationLogs[Application Logs<br/>Error patterns<br/>Performance issues<br/>Business logic alerts]
+        CloudWatchAlarms[CloudWatch Alarms Threshold-based Composite alarms Anomaly detection]
+        HealthChecks[Route 53 Health Checks Endpoint monitoring Latency checks Failure detection]
+        SecurityAlerts[Security Alerts GuardDuty findings Config compliance Access anomalies]
+        ApplicationLogs[Application Logs Error patterns Performance issues Business logic alerts]
     end
     
     subgraph "Notification Channels"
-        SNSTopic[SNS Topics<br/>Email notifications<br/>SMS alerts<br/>HTTP endpoints]
-        SlackIntegration[Slack Integration<br/>Channel notifications<br/>Direct messages<br/>Alert threading]
-        PagerDuty[PagerDuty<br/>On-call rotation<br/>Escalation policies<br/>Incident management]
-        EmailGroups[Email Groups<br/>Distribution lists<br/>Role-based routing<br/>Executive summaries]
+        SNSTopic[SNS Topics Email notifications SMS alerts HTTP endpoints]
+        SlackIntegration[Slack Integration Channel notifications Direct messages Alert threading]
+        PagerDuty[PagerDuty On-call rotation Escalation policies Incident management]
+        EmailGroups[Email Groups Distribution lists Role-based routing Executive summaries]
     end
     
     subgraph "Automated Responses"
-        AutoScaling[Auto Scaling Actions<br/>ECS service scaling<br/>Resource adjustment<br/>Capacity management]
-        LambdaTriggers[Lambda Triggers<br/>Custom remediation<br/>Automated failover<br/>Self-healing actions]
-        RunbookExecution[Runbook Execution<br/>Systems Manager<br/>Automated procedures<br/>Standard responses]
+        AutoScaling[Auto Scaling Actions ECS service scaling Resource adjustment Capacity management]
+        LambdaTriggers[Lambda Triggers Custom remediation Automated failover Self-healing actions]
+        RunbookExecution[Runbook Execution Systems Manager Automated procedures Standard responses]
     end
     
     P1 --> CloudWatchAlarms
@@ -921,7 +921,7 @@ sequenceDiagram
     
     Note over User,SNS: Automated Failover Process
     Lambda->>SNS: Send Alert (Failover Started)
-    Lambda->>ECS: Scale Service (0 → 2 tasks)
+    Lambda->>ECS: Scale Service (0 to 2 tasks)
     Lambda->>RDS: Promote Read Replica
     
     par Parallel Failover Actions
@@ -1007,22 +1007,22 @@ curl -I https://d15jb99tjkxquc.cloudfront.net
 ```mermaid
 graph TD
     subgraph "Pre-Failback Assessment"
-        A1[Assess Primary Region<br/>Infrastructure Status<br/>Service Readiness<br/>Data Integrity]
-        A2[Validate Data Sync<br/>Compare DR to Primary<br/>Identify Discrepancies<br/>Plan Data Merge]
-        A3[Test Primary Services<br/>Database Connectivity<br/>Application Health<br/>Performance Validation]
+        A1[Assess Primary Region Infrastructure Status Service Readiness Data Integrity]
+        A2[Validate Data Sync Compare DR to Primary Identify Discrepancies Plan Data Merge]
+        A3[Test Primary Services Database Connectivity Application Health Performance Validation]
     end
     
     subgraph "Failback Execution"
-        B1[Prepare Primary Region<br/>Update Infrastructure<br/>Deploy Latest Code<br/>Configure Services]
-        B2[Synchronize Data<br/>Export from DR Database<br/>Import to Primary<br/>Validate Consistency]
-        B3[Update DNS Records<br/>CloudFront Origin Switch<br/>Route 53 Configuration<br/>Health Check Updates]
-        B4[Scale Down DR Services<br/>ECS Tasks: 2 → 0<br/>Cost Optimization<br/>Maintain Standby State]
+        B1[Prepare Primary Region Update Infrastructure Deploy Latest Code Configure Services]
+        B2[Synchronize Data Export from DR Database Import to Primary Validate Consistency]
+        B3[Update DNS Records CloudFront Origin Switch Route 53 Configuration Health Check Updates]
+        B4[Scale Down DR Services ECS Tasks 2 to 0 Cost Optimization Maintain Standby State]
     end
     
     subgraph "Post-Failback Validation"
-        C1[Monitor Primary Region<br/>Performance Metrics<br/>Error Rates<br/>User Experience]
-        C2[Verify DR Readiness<br/>Replication Status<br/>Standby Validation<br/>Future Failover Prep]
-        C3[Document Lessons<br/>Incident Report<br/>Process Improvements<br/>Update Procedures]
+        C1[Monitor Primary Region Performance Metrics Error Rates User Experience]
+        C2[Verify DR Readiness Replication Status Standby Validation Future Failover Prep]
+        C3[Document Lessons Incident Report Process Improvements Update Procedures]
     end
     
     A1 --> A2
@@ -1061,65 +1061,65 @@ graph TD
 graph TB
     subgraph "Production Region Costs: eu-central-1"
         subgraph "Compute Services"
-            ECS_PROD[ECS Fargate<br/>2 tasks × 0.25 vCPU × 0.5 GB<br/>24/7 runtime<br/>Monthly: $18.20]
-            ALB_PROD[Application Load Balancer<br/>Fixed monthly cost<br/>Data processing charges<br/>Monthly: $22.50]
-            NAT_PROD[NAT Gateways<br/>2 gateways × Multi-AZ<br/>Data transfer costs<br/>Monthly: $90.00]
+            ECS_PROD[ECS Fargate 2 tasks x 0.25 vCPU x 0.5 GB 24/7 runtime Monthly 18.20 USD]
+            ALB_PROD[Application Load Balancer Fixed monthly cost Data processing charges Monthly 22.50 USD]
+            NAT_PROD[NAT Gateways 2 gateways x Multi-AZ Data transfer costs Monthly 90.00 USD]
         end
         
         subgraph "Database Services"
-            RDS_PROD[Aurora MySQL Cluster<br/>2 × db.t3.large instances<br/>Multi-AZ deployment<br/>Monthly: $120.00]
-            STORAGE_PROD[Database Storage<br/>20 GB allocated storage<br/>I/O operations<br/>Monthly: $8.50]
-            BACKUP_PROD[Automated Backups<br/>7-day retention<br/>Cross-region backup<br/>Monthly: $12.00]
+            RDS_PROD[Aurora MySQL Cluster 2 x db.t3.large instances Multi-AZ deployment Monthly 120.00 USD]
+            STORAGE_PROD[Database Storage 20 GB allocated storage I/O operations Monthly 8.50 USD]
+            BACKUP_PROD[Automated Backups 7-day retention Cross-region backup Monthly 12.00 USD]
         end
         
         subgraph "Storage Services"
-            S3_PROD[S3 Standard Storage<br/>Application assets<br/>Cross-region replication<br/>Monthly: $3.20]
-            ECR_PROD[ECR Repository<br/>Container image storage<br/>Data transfer costs<br/>Monthly: $2.10]
+            S3_PROD[S3 Standard Storage Application assets Cross-region replication Monthly 3.20 USD]
+            ECR_PROD[ECR Repository Container image storage Data transfer costs Monthly 2.10 USD]
         end
         
         subgraph "Networking Services"
-            DATA_PROD[Data Transfer<br/>50 GB monthly average<br/>Inter-AZ transfer<br/>Monthly: $5.00]
-            VPC_PROD[VPC Endpoints<br/>S3 and ECR endpoints<br/>Interface endpoints<br/>Monthly: $7.20]
+            DATA_PROD[Data Transfer 50 GB monthly average Inter-AZ transfer Monthly 5.00 USD]
+            VPC_PROD[VPC Endpoints S3 and ECR endpoints Interface endpoints Monthly 7.20 USD]
         end
         
-        TOTAL_PROD[Production Total<br/>Monthly: $288.70]
+        TOTAL_PROD[Production Total Monthly 288.70 USD]
     end
     
     subgraph "DR Region Costs: eu-west-1"
         subgraph "Standby Services"
-            ECS_DR[ECS Fargate<br/>0 tasks (pilot light)<br/>Cluster maintenance only<br/>Monthly: $0.00]
-            ALB_DR[Application Load Balancer<br/>Pre-configured for failover<br/>Minimal data processing<br/>Monthly: $22.50]
-            RDS_DR[Aurora Read Replica<br/>1 × db.t3.large instance<br/>Read-only standby<br/>Monthly: $60.00]
+            ECS_DR[ECS Fargate 0 tasks pilot light Cluster maintenance only Monthly 0.00 USD]
+            ALB_DR[Application Load Balancer Pre-configured for failover Minimal data processing Monthly 22.50 USD]
+            RDS_DR[Aurora Read Replica 1 x db.t3.large instance Read-only standby Monthly 60.00 USD]
         end
         
         subgraph "Replication Services"
-            S3_DR[S3 Replication Target<br/>Cross-region replicated data<br/>Standard storage class<br/>Monthly: $2.80]
-            ECR_DR[ECR Repository<br/>Replicated container images<br/>On-demand pulls<br/>Monthly: $1.50]
+            S3_DR[S3 Replication Target Cross-region replicated data Standard storage class Monthly 2.80 USD]
+            ECR_DR[ECR Repository Replicated container images On-demand pulls Monthly 1.50 USD]
         end
         
         subgraph "DR Networking"
-            DATA_DR[Data Transfer<br/>Replication bandwidth<br/>Cross-region charges<br/>Monthly: $4.20]
+            DATA_DR[Data Transfer Replication bandwidth Cross-region charges Monthly 4.20 USD]
         end
         
-        TOTAL_DR[DR Total<br/>Monthly: $91.00]
+        TOTAL_DR[DR Total Monthly 91.00 USD]
     end
     
     subgraph "Global Services"
         subgraph "Content Delivery"
-            CLOUDFRONT[CloudFront Distribution<br/>Global edge locations<br/>Data transfer out<br/>Monthly: $15.30]
-            ROUTE53[Route 53 Hosted Zone<br/>DNS queries<br/>Health checks<br/>Monthly: $3.50]
+            CLOUDFRONT[CloudFront Distribution Global edge locations Data transfer out Monthly 15.30 USD]
+            ROUTE53[Route 53 Hosted Zone DNS queries Health checks Monthly 3.50 USD]
         end
         
         subgraph "Management Services"
-            CLOUDWATCH[CloudWatch<br/>Metrics, logs, alarms<br/>Dashboard charges<br/>Monthly: $8.75]
-            SSM[Systems Manager<br/>Parameter Store<br/>Patch management<br/>Monthly: $2.25]
+            CLOUDWATCH[CloudWatch Metrics logs alarms Dashboard charges Monthly 8.75 USD]
+            SSM[Systems Manager Parameter Store Patch management Monthly 2.25 USD]
         end
         
-        TOTAL_GLOBAL[Global Services Total<br/>Monthly: $29.80]
+        TOTAL_GLOBAL[Global Services Total Monthly 29.80 USD]
     end
     
     subgraph "Total Infrastructure Cost"
-        GRAND_TOTAL[Monthly Total<br/>$409.50<br/>Annual: $4,914<br/>Per User: $4.82]
+        GRAND_TOTAL[Monthly Total 409.50 USD Annual 4914 USD Per User 4.82 USD]
     end
     
     ECS_PROD --> TOTAL_PROD
@@ -1161,31 +1161,31 @@ graph TB
 
 ```mermaid
 graph TD
-    subgraph "Immediate Optimizations (0-30 days)"
-        OPT1[Single NAT Gateway<br/>Savings: $45/month<br/>Risk: Reduced AZ redundancy<br/>Implementation: 1 hour]
-        OPT2[Scheduled ECS Scaling<br/>Savings: $10-15/month<br/>Risk: None<br/>Implementation: 2 hours]
-        OPT3[S3 Lifecycle Policies<br/>Savings: $2-5/month<br/>Risk: None<br/>Implementation: 30 minutes]
-        OPT4[CloudWatch Log Retention<br/>Savings: $3-8/month<br/>Risk: Reduced log history<br/>Implementation: 15 minutes]
+    subgraph "Immediate Optimizations 0-30 days"
+        OPT1[Single NAT Gateway Savings 45 USD/month Risk Reduced AZ redundancy Implementation 1 hour]
+        OPT2[Scheduled ECS Scaling Savings 10-15 USD/month Risk None Implementation 2 hours]
+        OPT3[S3 Lifecycle Policies Savings 2-5 USD/month Risk None Implementation 30 minutes]
+        OPT4[CloudWatch Log Retention Savings 3-8 USD/month Risk Reduced log history Implementation 15 minutes]
     end
     
-    subgraph "Medium-term Optimizations (1-3 months)"
-        OPT5[Reserved Instance Pricing<br/>Savings: 30-50% on RDS<br/>Risk: 1-year commitment<br/>Implementation: 1 day]
-        OPT6[Fargate Spot Instances<br/>Savings: 70% on compute<br/>Risk: Task interruption<br/>Implementation: 1 week]
-        OPT7[Cross-Region Transfer Optimization<br/>Savings: $5-10/month<br/>Risk: Slightly higher latency<br/>Implementation: 2 days]
-        OPT8[CloudFront Caching Optimization<br/>Savings: $8-12/month<br/>Risk: Cache invalidation complexity<br/>Implementation: 3 days]
+    subgraph "Medium-term Optimizations 1-3 months"
+        OPT5[Reserved Instance Pricing Savings 30-50 percent on RDS Risk 1-year commitment Implementation 1 day]
+        OPT6[Fargate Spot Instances Savings 70 percent on compute Risk Task interruption Implementation 1 week]
+        OPT7[Cross-Region Transfer Optimization Savings 5-10 USD/month Risk Slightly higher latency Implementation 2 days]
+        OPT8[CloudFront Caching Optimization Savings 8-12 USD/month Risk Cache invalidation complexity Implementation 3 days]
     end
     
-    subgraph "Long-term Optimizations (3-12 months)"
-        OPT9[Multi-Region Database Optimization<br/>Savings: $20-30/month<br/>Risk: Architecture changes<br/>Implementation: 2 weeks]
-        OPT10[Serverless Aurora<br/>Savings: 40-60% on database<br/>Risk: Cold start latency<br/>Implementation: 1 week]
-        OPT11[Container Image Optimization<br/>Savings: $5-15/month<br/>Risk: Increased build time<br/>Implementation: 1 week]
-        OPT12[Resource Right-sizing<br/>Savings: 15-25% overall<br/>Risk: Performance impact<br/>Implementation: Ongoing]
+    subgraph "Long-term Optimizations 3-12 months"
+        OPT9[Multi-Region Database Optimization Savings 20-30 USD/month Risk Architecture changes Implementation 2 weeks]
+        OPT10[Serverless Aurora Savings 40-60 percent on database Risk Cold start latency Implementation 1 week]
+        OPT11[Container Image Optimization Savings 5-15 USD/month Risk Increased build time Implementation 1 week]
+        OPT12[Resource Right-sizing Savings 15-25 percent overall Risk Performance impact Implementation Ongoing]
     end
     
     subgraph "Cost Monitoring Implementation"
-        BUDGET1[AWS Budgets<br/>Monthly spending alerts<br/>Department allocation<br/>Anomaly detection]
-        BUDGET2[Cost Explorer<br/>Detailed usage analysis<br/>Trend identification<br/>Optimization recommendations]
-        BUDGET3[Tagging Strategy<br/>Resource categorization<br/>Cost allocation<br/>Department chargebacks]
+        BUDGET1[AWS Budgets Monthly spending alerts Department allocation Anomaly detection]
+        BUDGET2[Cost Explorer Detailed usage analysis Trend identification Optimization recommendations]
+        BUDGET3[Tagging Strategy Resource categorization Cost allocation Department chargebacks]
     end
     
     OPT1 --> OPT5
@@ -1235,6 +1235,8 @@ graph TD
 gantt
     title Infrastructure Maintenance Calendar
     dateFormat  YYYY-MM-DD
+    axisFormat %M:%S
+    
     section Daily Tasks
     Monitor Dashboards          :done, daily1, 2024-01-01, 1d
     Check Application Logs      :done, daily2, 2024-01-01, 1d
@@ -1265,31 +1267,31 @@ gantt
 ```mermaid
 graph TD
     subgraph "Automated Backup Procedures"
-        B1[RDS Automated Backups<br/>Daily at 03:00 UTC<br/>7-day retention<br/>Point-in-time recovery]
-        B2[Application Data Backup<br/>S3 versioning enabled<br/>Cross-region replication<br/>Lifecycle policies]
-        B3[Configuration Backup<br/>Terraform state backup<br/>Parameter Store export<br/>GitHub repository sync]
-        B4[Container Image Backup<br/>ECR lifecycle policies<br/>Multi-region replication<br/>Vulnerability scanning]
+        B1[RDS Automated Backups Daily at 03:00 UTC 7-day retention Point-in-time recovery]
+        B2[Application Data Backup S3 versioning enabled Cross-region replication Lifecycle policies]
+        B3[Configuration Backup Terraform state backup Parameter Store export GitHub repository sync]
+        B4[Container Image Backup ECR lifecycle policies Multi-region replication Vulnerability scanning]
     end
     
     subgraph "Health Check Automation"
-        H1[ALB Target Health<br/>Continuous monitoring<br/>Automatic replacement<br/>Alert on failure]
-        H2[ECS Service Health<br/>Container health checks<br/>Automatic restart<br/>Performance monitoring]
-        H3[Database Health<br/>Connection monitoring<br/>Performance metrics<br/>Replication lag alerts]
-        H4[Cross-Region Health<br/>Connectivity tests<br/>Failover capability<br/>Sync verification]
+        H1[ALB Target Health Continuous monitoring Automatic replacement Alert on failure]
+        H2[ECS Service Health Container health checks Automatic restart Performance monitoring]
+        H3[Database Health Connection monitoring Performance metrics Replication lag alerts]
+        H4[Cross-Region Health Connectivity tests Failover capability Sync verification]
     end
     
     subgraph "Security Maintenance"
-        S1[Vulnerability Scanning<br/>ECR image scanning<br/>OS patch assessment<br/>Dependency updates]
-        S2[Access Review<br/>IAM policy validation<br/>Permission auditing<br/>Unused resource cleanup]
-        S3[Certificate Management<br/>SSL/TLS renewal<br/>Expiration monitoring<br/>Automatic rotation]
-        S4[Security Group Audit<br/>Rule validation<br/>Unused rule cleanup<br/>Compliance checking]
+        S1[Vulnerability Scanning ECR image scanning OS patch assessment Dependency updates]
+        S2[Access Review IAM policy validation Permission auditing Unused resource cleanup]
+        S3[Certificate Management SSL/TLS renewal Expiration monitoring Automatic rotation]
+        S4[Security Group Audit Rule validation Unused rule cleanup Compliance checking]
     end
     
     subgraph "Performance Optimization"
-        P1[Resource Right-sizing<br/>CPU/Memory analysis<br/>Cost optimization<br/>Performance tuning]
-        P2[Database Optimization<br/>Query performance<br/>Index optimization<br/>Connection pooling]
-        P3[Caching Strategy<br/>CloudFront optimization<br/>Application caching<br/>Database caching]
-        P4[Scaling Adjustments<br/>Auto-scaling tuning<br/>Capacity planning<br/>Peak load preparation]
+        P1[Resource Right-sizing CPU/Memory analysis Cost optimization Performance tuning]
+        P2[Database Optimization Query performance Index optimization Connection pooling]
+        P3[Caching Strategy CloudFront optimization Application caching Database caching]
+        P4[Scaling Adjustments Auto-scaling tuning Capacity planning Peak load preparation]
     end
     
     B1 --> H1
@@ -1335,35 +1337,35 @@ graph TD
 ```mermaid
 graph TD
     subgraph "Application Issues"
-        A1[ECS Tasks Failing to Start<br/>Status: STOPPED<br/>Common Causes:<br/>- Image pull errors<br/>- Resource constraints<br/>- Environment variables]
+        A1[ECS Tasks Failing to Start Status STOPPED Common Causes Image pull errors Resource constraints Environment variables]
         
-        A2[Database Connection Errors<br/>Status: Connection timeout<br/>Common Causes:<br/>- Security group rules<br/>- Database availability<br/>- Network connectivity]
+        A2[Database Connection Errors Status Connection timeout Common Causes Security group rules Database availability Network connectivity]
         
-        A3[High Response Times<br/>Status: Latency > 1000ms<br/>Common Causes:<br/>- Database performance<br/>- Resource constraints<br/>- Network latency]
+        A3[High Response Times Status Latency greater than 1000ms Common Causes Database performance Resource constraints Network latency]
     end
     
     subgraph "Infrastructure Issues"
-        I1[ALB Health Check Failures<br/>Status: Unhealthy targets<br/>Common Causes:<br/>- Application startup time<br/>- Health check path<br/>- Port configuration]
+        I1[ALB Health Check Failures Status Unhealthy targets Common Causes Application startup time Health check path Port configuration]
         
-        I2[Cross-Region Replication Lag<br/>Status: Lag > 30 seconds<br/>Common Causes:<br/>- Network connectivity<br/>- Write volume<br/>- Instance sizing]
+        I2[Cross-Region Replication Lag Status Lag greater than 30 seconds Common Causes Network connectivity Write volume Instance sizing]
         
-        I3[Auto-scaling Not Triggering<br/>Status: High CPU, no scaling<br/>Common Causes:<br/>- Metric thresholds<br/>- Scaling policies<br/>- Service limits]
+        I3[Auto-scaling Not Triggering Status High CPU no scaling Common Causes Metric thresholds Scaling policies Service limits]
     end
     
     subgraph "DR Issues"
-        D1[Failover Not Triggering<br/>Status: Manual intervention needed<br/>Common Causes:<br/>- Health check config<br/>- Route 53 policies<br/>- Lambda function errors]
+        D1[Failover Not Triggering Status Manual intervention needed Common Causes Health check config Route 53 policies Lambda function errors]
         
-        D2[DR Services Won't Start<br/>Status: Task definition errors<br/>Common Causes:<br/>- Image availability<br/>- IAM permissions<br/>- Network configuration]
+        D2[DR Services Won't Start Status Task definition errors Common Causes Image availability IAM permissions Network configuration]
         
-        D3[Data Inconsistency<br/>Status: Primary/DR mismatch<br/>Common Causes:<br/>- Replication lag<br/>- Split-brain scenario<br/>- Partial failover]
+        D3[Data Inconsistency Status Primary/DR mismatch Common Causes Replication lag Split-brain scenario Partial failover]
     end
     
     subgraph "Resolution Workflows"
-        R1[Diagnostic Steps<br/>1. Check CloudWatch logs<br/>2. Verify configurations<br/>3. Test connectivity<br/>4. Review metrics]
+        R1[Diagnostic Steps 1. Check CloudWatch logs 2. Verify configurations 3. Test connectivity 4. Review metrics]
         
-        R2[Immediate Actions<br/>1. Scale resources<br/>2. Restart services<br/>3. Update configurations<br/>4. Engage escalation]
+        R2[Immediate Actions 1. Scale resources 2. Restart services 3. Update configurations 4. Engage escalation]
         
-        R3[Long-term Fixes<br/>1. Infrastructure updates<br/>2. Process improvements<br/>3. Documentation updates<br/>4. Preventive measures]
+        R3[Long-term Fixes 1. Infrastructure updates 2. Process improvements 3. Documentation updates 4. Preventive measures]
     end
     
     A1 --> R1
@@ -1488,24 +1490,24 @@ aws cloudfront get-distribution \
 ```mermaid
 graph TD
     subgraph "Development Process"
-        DEV1[Create Feature Branch<br/>Branch from main<br/>Descriptive naming<br/>issue/feature-description]
-        DEV2[Local Development<br/>Code changes<br/>Local testing<br/>Docker validation]
-        DEV3[Pre-commit Checks<br/>Terraform fmt<br/>Terraform validate<br/>Security scanning]
-        DEV4[Commit and Push<br/>Descriptive messages<br/>Reference issues<br/>Sign commits]
+        DEV1[Create Feature Branch Branch from main Descriptive naming issue/feature-description]
+        DEV2[Local Development Code changes Local testing Docker validation]
+        DEV3[Pre-commit Checks Terraform fmt Terraform validate Security scanning]
+        DEV4[Commit and Push Descriptive messages Reference issues Sign commits]
     end
     
     subgraph "Review Process"
-        REV1[Create Pull Request<br/>Detailed description<br/>Link to issues<br/>Deployment impact]
-        REV2[Automated Testing<br/>Terraform plan<br/>Security scanning<br/>Code quality checks]
-        REV3[Peer Review<br/>Code review<br/>Architecture review<br/>Security review]
-        REV4[Approval Process<br/>2 approvals required<br/>All checks pass<br/>Deployment ready]
+        REV1[Create Pull Request Detailed description Link to issues Deployment impact]
+        REV2[Automated Testing Terraform plan Security scanning Code quality checks]
+        REV3[Peer Review Code review Architecture review Security review]
+        REV4[Approval Process 2 approvals required All checks pass Deployment ready]
     end
     
     subgraph "Deployment Process"
-        DEP1[Merge to Main<br/>Squash commits<br/>Update changelog<br/>Tag release]
-        DEP2[Automated Deployment<br/>GitHub Actions<br/>Terraform apply<br/>Rolling deployment]
-        DEP3[Post-deployment<br/>Health verification<br/>Monitoring checks<br/>Rollback if needed]
-        DEP4[Documentation<br/>Update README<br/>Release notes<br/>Runbook updates]
+        DEP1[Merge to Main Squash commits Update changelog Tag release]
+        DEP2[Automated Deployment GitHub Actions Terraform apply Rolling deployment]
+        DEP3[Post-deployment Health verification Monitoring checks Rollback if needed]
+        DEP4[Documentation Update README Release notes Runbook updates]
     end
     
     DEV1 --> DEV2
@@ -1606,16 +1608,16 @@ try {
 ```mermaid
 graph LR
     subgraph "Release Pipeline"
-        R1[Feature Complete<br/>All tests pass<br/>Documentation updated<br/>Security validated]
-        R2[Release Candidate<br/>Version tagging<br/>Staging deployment<br/>Integration testing]
-        R3[Production Release<br/>Deployment to production<br/>Health monitoring<br/>Rollback capability]
-        R4[Post-Release<br/>Monitoring validation<br/>Performance verification<br/>User feedback]
+        R1[Feature Complete All tests pass Documentation updated Security validated]
+        R2[Release Candidate Version tagging Staging deployment Integration testing]
+        R3[Production Release Deployment to production Health monitoring Rollback capability]
+        R4[Post-Release Monitoring validation Performance verification User feedback]
     end
     
     subgraph "Version Management"
-        V1[Semantic Versioning<br/>MAJOR.MINOR.PATCH<br/>Breaking.Feature.Bugfix<br/>Example: 2.1.0]
-        V2[Git Tags<br/>Annotated tags<br/>Release notes<br/>Deployment markers]
-        V3[Changelog<br/>User-facing changes<br/>Breaking changes<br/>Migration guides]
+        V1[Semantic Versioning MAJOR.MINOR.PATCH Breaking.Feature.Bugfix Example 2.1.0]
+        V2[Git Tags Annotated tags Release notes Deployment markers]
+        V3[Changelog User-facing changes Breaking changes Migration guides]
     end
     
     R1 --> R2
@@ -1651,10 +1653,3 @@ graph LR
 - **Security Best Practices**: [AWS Security Hub](https://aws.amazon.com/security-hub/)
 - **GitHub Actions**: [Workflow Documentation](https://docs.github.com/en/actions)
 
-
-
----
-
-**Docs Contribution**
-
-*This documentation is maintained as part of the Infrastructure as Code practices. For updates or corrections, please submit a pull request or create an issue in the GitHub repository.*
