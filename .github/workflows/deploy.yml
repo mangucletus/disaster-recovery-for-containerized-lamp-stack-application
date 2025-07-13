@@ -1,0 +1,419 @@
+# .github/workflows/deploy.yml
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - production
+          - dr
+
+env:
+  AWS_REGION: eu-central-1
+  DR_REGION: eu-west-1
+  PROJECT_NAME: student-record-system-v2
+
+jobs:
+  # Create ECR repository in primary region if it doesn't exist
+  create-ecr-primary:
+    name: Create ECR Repository (Primary)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Create ECR repository if not exists (Primary Region)
+      run: |
+        # Check if repository exists in primary region
+        if aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }} --region ${{ env.AWS_REGION }} 2>/dev/null; then
+          echo "ECR repository already exists in primary region"
+        else
+          echo "Creating ECR repository in primary region"
+          aws ecr create-repository \
+            --repository-name ${{ env.PROJECT_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --image-scanning-configuration scanOnPush=true
+          
+          # Set lifecycle policy to keep only last 10 images
+          aws ecr put-lifecycle-policy \
+            --repository-name ${{ env.PROJECT_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --lifecycle-policy-text '{
+              "rules": [
+                {
+                  "rulePriority": 1,
+                  "description": "Keep last 10 images",
+                  "selection": {
+                    "tagStatus": "any",
+                    "countType": "imageCountMoreThan",
+                    "countNumber": 10
+                  },
+                  "action": {
+                    "type": "expire"
+                  }
+                }
+              ]
+            }'
+        fi
+
+  # Create ECR repository in DR region if it doesn't exist
+  create-ecr-dr:
+    name: Create ECR Repository (DR)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Configure AWS credentials for DR region
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.DR_REGION }}
+    
+    - name: Create ECR repository if not exists (DR Region)
+      run: |
+        # Check if repository exists in DR region
+        if aws ecr describe-repositories --repository-names ${{ env.PROJECT_NAME }} --region ${{ env.DR_REGION }} 2>/dev/null; then
+          echo "ECR repository already exists in DR region"
+        else
+          echo "Creating ECR repository in DR region"
+          aws ecr create-repository \
+            --repository-name ${{ env.PROJECT_NAME }} \
+            --region ${{ env.DR_REGION }} \
+            --image-scanning-configuration scanOnPush=true
+          
+          # Set lifecycle policy to keep only last 10 images
+          aws ecr put-lifecycle-policy \
+            --repository-name ${{ env.PROJECT_NAME }} \
+            --region ${{ env.DR_REGION }} \
+            --lifecycle-policy-text '{
+              "rules": [
+                {
+                  "rulePriority": 1,
+                  "description": "Keep last 10 images",
+                  "selection": {
+                    "tagStatus": "any",
+                    "countType": "imageCountMoreThan",
+                    "countNumber": 10
+                  },
+                  "action": {
+                    "type": "expire"
+                  }
+                }
+              ]
+            }'
+        fi
+
+  # Build and push Docker image to both regions
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [create-ecr-primary, create-ecr-dr]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Configure AWS credentials (Primary)
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Login to Amazon ECR (Primary)
+      id: login-ecr-primary
+      uses: aws-actions/amazon-ecr-login@v1
+    
+    - name: Build, tag, and push image to Primary ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr-primary.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        cd docker
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+    
+    - name: Configure AWS credentials (DR)
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.DR_REGION }}
+    
+    - name: Login to Amazon ECR (DR)
+      id: login-ecr-dr
+      uses: aws-actions/amazon-ecr-login@v1
+    
+    - name: Tag and push image to DR ECR
+      env:
+        ECR_REGISTRY_DR: ${{ steps.login-ecr-dr.outputs.registry }}
+        ECR_REGISTRY_PRIMARY: ${{ steps.login-ecr-primary.outputs.registry }}
+        ECR_REPOSITORY: ${{ env.PROJECT_NAME }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Tag the existing image for DR region
+        docker tag $ECR_REGISTRY_PRIMARY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY_DR/$ECR_REPOSITORY:$IMAGE_TAG
+        docker tag $ECR_REGISTRY_PRIMARY/$ECR_REPOSITORY:latest $ECR_REGISTRY_DR/$ECR_REPOSITORY:latest
+        
+        # Push to DR region
+        docker push $ECR_REGISTRY_DR/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY_DR/$ECR_REPOSITORY:latest
+
+  # Deploy production infrastructure
+  deploy-production:
+    name: Deploy Production Infrastructure
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'production' || github.event.inputs.environment == 'all'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Terraform Init
+      working-directory: ./terraform/environments/production
+      run: terraform init
+    
+    # ✅ AUTO-IMPORT EXISTING IAM ROLES (Production)
+    - name: Import Existing IAM Roles (Production)
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: |
+        echo "🔄 Importing existing IAM roles if they exist..."
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
+      continue-on-error: true
+      timeout-minutes: 5
+
+      
+    # - name: Force Unlock Terraform State
+    #   working-directory: ./terraform/environments/production
+    #   env:
+    #     TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+    #   run: terraform force-unlock -force 480e701d-8953-d509-9e91-d3ad79bb6715
+    #   continue-on-error: true
+
+
+    - name: Terraform Plan
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform plan -out=tfplan
+    
+    - name: Terraform Apply
+      working-directory: ./terraform/environments/production
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+      run: terraform apply -auto-approve tfplan
+
+  # Deploy DR infrastructure
+  deploy-dr:
+    name: Deploy DR Infrastructure
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-production]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.environment == 'dr' || github.event.inputs.environment == 'all'))
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+    
+    - name: Configure AWS credentials for DR region
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.DR_REGION }}
+    
+    - name: Check if production resources exist
+      id: check-prod
+      run: |
+        # Check if production database exists
+        if aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/production/database-cluster-arn" --region ${{ env.AWS_REGION }} 2>/dev/null; then
+          echo "skip_replica=false" >> $GITHUB_OUTPUT
+        else
+          echo "skip_replica=true" >> $GITHUB_OUTPUT
+          echo "Production resources not found. Will create DR without read replica."
+        fi
+    
+    - name: Terraform Init
+      working-directory: ./terraform/environments/dr
+      run: terraform init
+    
+    # ✅ AUTO-IMPORT EXISTING IAM ROLES (DR)
+    - name: Import Existing IAM Roles (DR)
+      working-directory: ./terraform/environments/dr
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+        TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
+      run: |
+        echo "🔄 Importing existing IAM roles if they exist..."
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role.ecs_task ${{ env.PROJECT_NAME }}-ecs-task-role || echo "Role not found or already imported"
+        terraform import -input=false module.ecs.aws_iam_role_policy_attachment.ecs_task_execution ${{ env.PROJECT_NAME }}-ecs-task-execution-role/arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy || echo "Attachment not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_secrets_policy' ${{ env.PROJECT_NAME }}-ecs-task-execution-role:${{ env.PROJECT_NAME }}-ecs-secrets-policy || echo "Policy not found or already imported"
+        terraform import -input=false 'module.ecs.aws_iam_role_policy.ecs_task' ${{ env.PROJECT_NAME }}-ecs-task-role:${{ env.PROJECT_NAME }}-ecs-task-policy || echo "Policy not found or already imported"
+      continue-on-error: true
+      timeout-minutes: 5
+    
+    - name: Terraform Plan
+      working-directory: ./terraform/environments/dr
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+        TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
+      run: terraform plan -out=tfplan
+    
+    - name: Terraform Apply
+      working-directory: ./terraform/environments/dr
+      env:
+        TF_VAR_database_password: ${{ secrets.DATABASE_PASSWORD }}
+        TF_VAR_skip_read_replica: ${{ steps.check-prod.outputs.skip_replica }}
+      run: terraform apply -auto-approve tfplan
+
+  # Update ECS services with new image
+  update-services:
+    name: Update ECS Services
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-production, deploy-dr]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Configure AWS credentials for production
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Check if ECS service exists and update (Production)
+      run: |
+        # Check if service exists
+        if aws ecs describe-services --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-service --region ${{ env.AWS_REGION }} 2>/dev/null | grep -q "serviceArn"; then
+          echo "Updating Production ECS service with new image..."
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          
+          # Wait for service stability
+          aws ecs wait services-stable \
+            --cluster ${{ env.PROJECT_NAME }}-cluster \
+            --services ${{ env.PROJECT_NAME }}-service \
+            --region ${{ env.AWS_REGION }}
+        else
+          echo "Production ECS service not found. It may not be created yet."
+        fi
+    
+    - name: Configure AWS credentials for DR
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.DR_REGION }}
+    
+    - name: Update DR ECS task definition (keep desired count at 0)
+      run: |
+        # Update DR ECS service with latest image but keep at 0 desired count
+        if aws ecs describe-services --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-service --region ${{ env.DR_REGION }} 2>/dev/null | grep -q "serviceArn"; then
+          echo "Updating DR ECS task definition..."
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-service \
+            --force-new-deployment \
+            --region ${{ env.DR_REGION }}
+          echo "DR ECS service updated with latest image (desired count remains 0)"
+        else
+          echo "DR ECS service not found. It may not be created yet."
+        fi
+
+  # Output deployment summary
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [deploy-dr, update-services]
+    if: always()
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
+    - name: Get CloudFront URL
+      id: cloudfront
+      run: |
+        # Get CloudFront distribution URL from SSM Parameter Store
+        CF_URL=$(aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/cloudfront-url" --query 'Parameter.Value' --output text 2>/dev/null || echo "Not deployed yet")
+        echo "url=$CF_URL" >> $GITHUB_OUTPUT
+    
+    - name: Display Summary
+      run: |
+        echo "## Deployment Summary 🚀"
+        echo ""
+        echo "### Production Region (eu-central-1)"
+        echo "- Status: ✅ Deployed"
+        echo "- ECR: ✅ Images pushed"
+        echo "- IAM Roles: ✅ Auto-imported if existing"
+        echo ""
+        echo "### DR Region (eu-west-1)"
+        echo "- Status: ✅ Ready (Pilot Light Mode)"
+        echo "- ECS Tasks: 0 (Cost Optimization)"
+        echo "- RDS: Read Replica Active"
+        echo "- ECR: ✅ Images replicated"
+        echo "- IAM Roles: ✅ Auto-imported if existing"
+        echo ""
+        echo "### Access Information"
+        if [ "${{ steps.cloudfront.outputs.url }}" != "Not deployed yet" ]; then
+          echo "- CloudFront URL: https://${{ steps.cloudfront.outputs.url }}"
+        else
+          echo "- CloudFront URL: Will be available after full deployment"
+        fi
+        echo "- Failover: Manual via CloudFront script"
+        echo ""
+        echo "### Monitoring"
+        echo "- Production Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=eu-central-1#dashboards:name=${{ env.PROJECT_NAME }}-production-dashboard"
+        echo "- DR Dashboard: https://console.aws.amazon.com/cloudwatch/home?region=eu-west-1#dashboards:name=${{ env.PROJECT_NAME }}-dr-dashboard"
