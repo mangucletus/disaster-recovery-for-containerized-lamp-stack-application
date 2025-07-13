@@ -97,7 +97,7 @@ module "database" {
   database_name      = var.database_name
   master_username    = var.database_username
   master_password    = var.database_password
-  instance_class     = "db.r5.large" # Smaller instance for DR
+  instance_class     = "db.t4g.medium" # Smaller instance for DR
   is_read_replica    = var.skip_read_replica ? false : true
   source_cluster_arn = var.skip_read_replica ? "" : data.aws_ssm_parameter.database_cluster_arn[0].value
 }

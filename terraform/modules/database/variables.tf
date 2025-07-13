@@ -39,7 +39,7 @@ variable "master_password" {
 variable "instance_class" {
   description = "Instance class for Aurora instances"
   type        = string
-  default     = "db.r5.large"
+  default     = "db.t4g.medium"
 }
 
 variable "instance_count" {
