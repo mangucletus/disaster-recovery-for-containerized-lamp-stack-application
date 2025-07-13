@@ -114,8 +114,8 @@ module "alb" {
   public_subnet_ids     = module.networking.public_subnet_ids
   alb_security_group_id = module.security.alb_security_group_id
   certificate_arn       = var.acm_certificate_arn
-  enable_access_logs    = false  # Disabled to avoid permission issues
-  access_logs_bucket    = ""     # Empty since we're not using it
+  enable_access_logs    = false # Disabled to avoid permission issues
+  access_logs_bucket    = ""    # Empty since we're not using it
 }
 
 # Create ECS cluster and service
@@ -137,7 +137,7 @@ module "ecs" {
   max_capacity          = 10
   task_cpu              = "256"
   task_memory           = "512"
-  
+
 }
 
 # Store important outputs in Parameter Store for DR region and Lambda
@@ -225,11 +225,11 @@ module "cloudfront" {
   environment          = var.environment
   primary_alb_dns_name = module.alb.alb_dns_name
   primary_alb_arn      = module.alb.alb_arn
-  dr_alb_dns_name = local.dr_alb_dns_name
+  dr_alb_dns_name      = local.dr_alb_dns_name
 
   #dr_alb_dns_name      = try(data.aws_ssm_parameter.dr_alb_dns.value, "placeholder.elb.eu-west-1.amazonaws.com")
-  primary_region       = var.aws_region
-  dr_region            = "eu-west-1"
+  primary_region = var.aws_region
+  dr_region      = "eu-west-1"
 }
 
 # Create Lambda for automatic failover orchestration

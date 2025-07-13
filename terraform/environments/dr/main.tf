@@ -46,7 +46,7 @@ data "aws_caller_identity" "current" {}
 data "aws_ssm_parameter" "database_cluster_arn" {
   provider = aws.primary
   name     = "/${var.project_name}/production/database-cluster-arn"
-  
+
   # This makes the data source optional - won't fail if doesn't exist
   count = var.skip_read_replica ? 0 : 1
 }
@@ -83,7 +83,7 @@ module "ecr" {
   project_name                    = var.project_name
   environment                     = var.environment
   enable_cross_region_replication = false
- 
+
 }
 
 # Create RDS Aurora - either read replica or standalone
@@ -130,8 +130,8 @@ module "ecs" {
   project_name          = var.project_name
   environment           = var.environment
   aws_region            = var.aws_region
-  ecr_repository_url    = module.ecr.repository_url  # ✅ Use DR region ECR
-  private_subnet_ids    = module.networking.public_subnet_ids  # Use public subnets since no NAT
+  ecr_repository_url    = module.ecr.repository_url           # ✅ Use DR region ECR
+  private_subnet_ids    = module.networking.public_subnet_ids # Use public subnets since no NAT
   ecs_security_group_id = module.security.ecs_security_group_id
   target_group_arn      = module.alb.target_group_arn
   database_endpoint     = module.database.cluster_endpoint
@@ -142,8 +142,8 @@ module "ecs" {
   max_capacity          = 10
   task_cpu              = "256"
   task_memory           = "512"
-  assign_public_ip      = true  # Need public IP since no NAT gateway
- 
+  assign_public_ip      = true # Need public IP since no NAT gateway
+
 }
 
 # Store DR endpoints for failover script and CloudFront
