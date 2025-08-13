@@ -1,135 +1,135 @@
-name: Health Monitoring
+# name: Health Monitoring
 
-on:
-  schedule:
-    # Run every 5 minutes
-    - cron: '*/5 * * * *'
-  workflow_dispatch:
+# on:
+#   schedule:
+#     # Run every 5 minutes
+#     - cron: '*/5 * * * *'
+#   workflow_dispatch:
 
-env:
-  AWS_REGION: eu-central-1
-  DR_REGION: eu-west-1
-  PROJECT_NAME: student-record-system-v2
+# env:
+#   AWS_REGION: eu-central-1
+#   DR_REGION: eu-west-1
+#   PROJECT_NAME: student-record-system-v2
 
-jobs:
-  monitor-health:
-    name: Monitor Application Health
-    runs-on: ubuntu-latest
+# jobs:
+#   monitor-health:
+#     name: Monitor Application Health
+#     runs-on: ubuntu-latest
     
-    steps:
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+#     steps:
+#     - name: Configure AWS credentials
+#       uses: aws-actions/configure-aws-credentials@v2
+#       with:
+#         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#         aws-region: ${{ env.AWS_REGION }}
     
-    - name: Check Primary Region Health
-      id: primary-health
-      run: |
-        # Get ALB target health
-        ALB_ARN=$(aws elbv2 describe-load-balancers --names ${{ env.PROJECT_NAME }}-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
+#     - name: Check Primary Region Health
+#       id: primary-health
+#       run: |
+#         # Get ALB target health
+#         ALB_ARN=$(aws elbv2 describe-load-balancers --names ${{ env.PROJECT_NAME }}-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
         
-        if [ -n "$ALB_ARN" ]; then
-          TG_ARN=$(aws elbv2 describe-target-groups --load-balancer-arn $ALB_ARN --query 'TargetGroups[0].TargetGroupArn' --output text)
-          HEALTHY_COUNT=$(aws elbv2 describe-target-health --target-group-arn $TG_ARN --query 'length(TargetHealthDescriptions[?TargetHealth.State==`healthy`])' --output text)
-          TOTAL_COUNT=$(aws elbv2 describe-target-health --target-group-arn $TG_ARN --query 'length(TargetHealthDescriptions)' --output text)
+#         if [ -n "$ALB_ARN" ]; then
+#           TG_ARN=$(aws elbv2 describe-target-groups --load-balancer-arn $ALB_ARN --query 'TargetGroups[0].TargetGroupArn' --output text)
+#           HEALTHY_COUNT=$(aws elbv2 describe-target-health --target-group-arn $TG_ARN --query 'length(TargetHealthDescriptions[?TargetHealth.State==`healthy`])' --output text)
+#           TOTAL_COUNT=$(aws elbv2 describe-target-health --target-group-arn $TG_ARN --query 'length(TargetHealthDescriptions)' --output text)
           
-          echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
-          echo "total_count=$TOTAL_COUNT" >> $GITHUB_OUTPUT
+#           echo "healthy_count=$HEALTHY_COUNT" >> $GITHUB_OUTPUT
+#           echo "total_count=$TOTAL_COUNT" >> $GITHUB_OUTPUT
           
-          if [ "$HEALTHY_COUNT" -eq "0" ] && [ "$TOTAL_COUNT" -gt "0" ]; then
-            echo "is_healthy=false" >> $GITHUB_OUTPUT
-          else
-            echo "is_healthy=true" >> $GITHUB_OUTPUT
-          fi
-        else
-          echo "is_healthy=false" >> $GITHUB_OUTPUT
-          echo "healthy_count=0" >> $GITHUB_OUTPUT
-          echo "total_count=0" >> $GITHUB_OUTPUT
-        fi
+#           if [ "$HEALTHY_COUNT" -eq "0" ] && [ "$TOTAL_COUNT" -gt "0" ]; then
+#             echo "is_healthy=false" >> $GITHUB_OUTPUT
+#           else
+#             echo "is_healthy=true" >> $GITHUB_OUTPUT
+#           fi
+#         else
+#           echo "is_healthy=false" >> $GITHUB_OUTPUT
+#           echo "healthy_count=0" >> $GITHUB_OUTPUT
+#           echo "total_count=0" >> $GITHUB_OUTPUT
+#         fi
     
-    - name: Check DR Region Health
-      id: dr-health
-      run: |
-        # Switch to DR region
-        aws configure set region ${{ env.DR_REGION }}
+#     - name: Check DR Region Health
+#       id: dr-health
+#       run: |
+#         # Switch to DR region
+#         aws configure set region ${{ env.DR_REGION }}
         
-        # Check if failover is in progress
-        FAILOVER_STATUS=$(aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/failover/in-progress" --query 'Parameter.Value' --output text 2>/dev/null || echo "false")
-        echo "failover_in_progress=$FAILOVER_STATUS" >> $GITHUB_OUTPUT
+#         # Check if failover is in progress
+#         FAILOVER_STATUS=$(aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/failover/in-progress" --query 'Parameter.Value' --output text 2>/dev/null || echo "false")
+#         echo "failover_in_progress=$FAILOVER_STATUS" >> $GITHUB_OUTPUT
         
-        # Check RDS read replica status
-        RDS_STATUS=$(aws rds describe-db-clusters --db-cluster-identifier ${{ env.PROJECT_NAME }}-aurora-cluster-replica --query 'DBClusters[0].Status' --output text 2>/dev/null || echo "unknown")
-        echo "rds_status=$RDS_STATUS" >> $GITHUB_OUTPUT
+#         # Check RDS read replica status
+#         RDS_STATUS=$(aws rds describe-db-clusters --db-cluster-identifier ${{ env.PROJECT_NAME }}-aurora-cluster-replica --query 'DBClusters[0].Status' --output text 2>/dev/null || echo "unknown")
+#         echo "rds_status=$RDS_STATUS" >> $GITHUB_OUTPUT
         
-        # Check ECS service status
-        ECS_RUNNING=$(aws ecs describe-services --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-service --query 'services[0].runningCount' --output text 2>/dev/null || echo "0")
-        echo "ecs_running=$ECS_RUNNING" >> $GITHUB_OUTPUT
+#         # Check ECS service status
+#         ECS_RUNNING=$(aws ecs describe-services --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-service --query 'services[0].runningCount' --output text 2>/dev/null || echo "0")
+#         echo "ecs_running=$ECS_RUNNING" >> $GITHUB_OUTPUT
     
-    - name: Check CloudFront Distribution
-      id: cloudfront-health
-      run: |
-        # Get CloudFront distribution ID from SSM
-        CF_DIST_ID=$(aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/cloudfront-distribution-id" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+#     - name: Check CloudFront Distribution
+#       id: cloudfront-health
+#       run: |
+#         # Get CloudFront distribution ID from SSM
+#         CF_DIST_ID=$(aws ssm get-parameter --name "/${{ env.PROJECT_NAME }}/cloudfront-distribution-id" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
         
-        if [ -n "$CF_DIST_ID" ]; then
-          # Get CloudFront metrics
-          END_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S")
-          START_TIME=$(date -u -d '5 minutes ago' +"%Y-%m-%dT%H:%M:%S")
+#         if [ -n "$CF_DIST_ID" ]; then
+#           # Get CloudFront metrics
+#           END_TIME=$(date -u +"%Y-%m-%dT%H:%M:%S")
+#           START_TIME=$(date -u -d '5 minutes ago' +"%Y-%m-%dT%H:%M:%S")
           
-          ERROR_RATE=$(aws cloudwatch get-metric-statistics \
-            --namespace AWS/CloudFront \
-            --metric-name 5xxErrorRate \
-            --dimensions Name=DistributionId,Value=$CF_DIST_ID \
-            --start-time $START_TIME \
-            --end-time $END_TIME \
-            --period 300 \
-            --statistics Average \
-            --query 'Datapoints[0].Average' \
-            --output text 2>/dev/null || echo "0")
+#           ERROR_RATE=$(aws cloudwatch get-metric-statistics \
+#             --namespace AWS/CloudFront \
+#             --metric-name 5xxErrorRate \
+#             --dimensions Name=DistributionId,Value=$CF_DIST_ID \
+#             --start-time $START_TIME \
+#             --end-time $END_TIME \
+#             --period 300 \
+#             --statistics Average \
+#             --query 'Datapoints[0].Average' \
+#             --output text 2>/dev/null || echo "0")
           
-          echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
-        fi
+#           echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
+#         fi
     
-    - name: Generate Health Report
-      run: |
-        echo "## Health Status Report 🏥"
-        echo ""
-        echo "**Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
-        echo ""
-        echo "### Primary Region (eu-central-1)"
-        echo "- ALB Health: ${{ steps.primary-health.outputs.healthy_count }}/${{ steps.primary-health.outputs.total_count }} healthy targets"
-        echo "- Status: ${{ steps.primary-health.outputs.is_healthy == 'true' && '✅ Healthy' || '❌ Unhealthy' }}"
-        echo ""
-        echo "### DR Region (eu-west-1)"
-        echo "- RDS Status: ${{ steps.dr-health.outputs.rds_status }}"
-        echo "- ECS Running Tasks: ${{ steps.dr-health.outputs.ecs_running }}"
-        echo "- Failover Status: ${{ steps.dr-health.outputs.failover_in_progress == 'true' && '🔄 In Progress' || '✅ Standby' }}"
-        echo ""
-        echo "### CloudFront"
-        echo "- 5xx Error Rate: ${{ steps.cloudfront-health.outputs.error_rate }}%"
+#     - name: Generate Health Report
+#       run: |
+#         echo "## Health Status Report 🏥"
+#         echo ""
+#         echo "**Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+#         echo ""
+#         echo "### Primary Region (eu-central-1)"
+#         echo "- ALB Health: ${{ steps.primary-health.outputs.healthy_count }}/${{ steps.primary-health.outputs.total_count }} healthy targets"
+#         echo "- Status: ${{ steps.primary-health.outputs.is_healthy == 'true' && '✅ Healthy' || '❌ Unhealthy' }}"
+#         echo ""
+#         echo "### DR Region (eu-west-1)"
+#         echo "- RDS Status: ${{ steps.dr-health.outputs.rds_status }}"
+#         echo "- ECS Running Tasks: ${{ steps.dr-health.outputs.ecs_running }}"
+#         echo "- Failover Status: ${{ steps.dr-health.outputs.failover_in_progress == 'true' && '🔄 In Progress' || '✅ Standby' }}"
+#         echo ""
+#         echo "### CloudFront"
+#         echo "- 5xx Error Rate: ${{ steps.cloudfront-health.outputs.error_rate }}%"
         
-        # Create issue if primary is unhealthy
-        if [ "${{ steps.primary-health.outputs.is_healthy }}" = "false" ]; then
-          echo ""
-          echo "⚠️ **ALERT: Primary region appears unhealthy!**"
-          echo "Automatic failover will be triggered by CloudWatch alarms if the condition persists."
-        fi
+#         # Create issue if primary is unhealthy
+#         if [ "${{ steps.primary-health.outputs.is_healthy }}" = "false" ]; then
+#           echo ""
+#           echo "⚠️ **ALERT: Primary region appears unhealthy!**"
+#           echo "Automatic failover will be triggered by CloudWatch alarms if the condition persists."
+#         fi
     
-    - name: Send Alert if Unhealthy
-      if: steps.primary-health.outputs.is_healthy == 'false'
-      uses: 8398a7/action-slack@v3
-      with:
-        status: custom
-        custom_payload: |
-          {
-            text: "🚨 Primary Region Health Alert",
-            attachments: [{
-              color: 'danger',
-              text: `Primary region has ${{ steps.primary-health.outputs.healthy_count }}/${{ steps.primary-health.outputs.total_count }} healthy targets. Automatic failover may be triggered if this persists.`
-            }]
-          }
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-      continue-on-error: true
+#     - name: Send Alert if Unhealthy
+#       if: steps.primary-health.outputs.is_healthy == 'false'
+#       uses: 8398a7/action-slack@v3
+#       with:
+#         status: custom
+#         custom_payload: |
+#           {
+#             text: "🚨 Primary Region Health Alert",
+#             attachments: [{
+#               color: 'danger',
+#               text: `Primary region has ${{ steps.primary-health.outputs.healthy_count }}/${{ steps.primary-health.outputs.total_count }} healthy targets. Automatic failover may be triggered if this persists.`
+#             }]
+#           }
+#       env:
+#         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+#       continue-on-error: true
